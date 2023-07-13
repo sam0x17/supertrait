@@ -1,3 +1,6 @@
+[workspace]
+members = ["macros"]
+
 [package]
 name = "supertrait"
 version = "0.0.1"
@@ -8,3 +11,4 @@ license = "MIT"
 repository = "https://github.com/sam0x17/supertrait"
 
 [dependencies]
+supertrait-macros = { path = "macros", version = "0.0.1" }
