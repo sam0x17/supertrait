@@ -1,0 +1,9 @@
+[package]
+name = "supertrait"
+version = "0.0.1"
+edition = "2021"
+authors = ["sam0x17"]
+description = "WIP crate providing default associated types and const fn trait items via some macro hackery"
+license = "MIT"
+
+[dependencies]
