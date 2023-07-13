@@ -7,4 +7,10 @@ license = "MIT"
 description = "Support macros for supertrait"
 repository = "https://github.com/sam0x17/supertrait"
 
+[lib]
+proc-macro = true
+
 [dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"
