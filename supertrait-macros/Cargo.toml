@@ -1,0 +1,10 @@
+[package]
+name = "supertrait-macros"
+version = "0.1.0"
+edition = "2021"
+authors = ["sam0x17"]
+license = "MIT"
+description = "Support macros for supertrait"
+repository = "https://github.com/sam0x17/supertrait"
+
+[dependencies]
