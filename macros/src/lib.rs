@@ -158,6 +158,22 @@ fn supertrait_internal(
         .supertraits
         .push(parse_quote!(DefaultTypes #default_use_generics));
 
+    let trait_use_generic_params = modified_trait.generics.params.iter().map(|g| match g {
+        GenericParam::Lifetime(lifetime) => lifetime.lifetime.to_token_stream(),
+        GenericParam::Type(typ) => typ.ident.to_token_stream(),
+        GenericParam::Const(constant) => constant.ident.to_token_stream(),
+    });
+
+    let trait_impl_generics = modified_trait.generics.clone();
+    let trait_use_generics = Generics {
+        lt_token: parse_quote!(<),
+        params: parse_quote!(#(#trait_use_generic_params),*),
+        gt_token: parse_quote!(>),
+        where_clause: modified_trait.generics.where_clause.clone(),
+    };
+
+    let const_fns = def.const_fns;
+
     let output = quote! {
         #(#attrs)*
         #[allow(non_snake_case)]
@@ -179,6 +195,16 @@ fn supertrait_internal(
             }
 
             #modified_trait
+
+            macro_rules! __send_tokens {
+                ($callback: path) => {
+                    trait_impl_generics: #trait_impl_generics,
+                    trait_use_generics: #trait_use_generics,
+                    default_impl_generics: #default_impl_generics,
+                    default_use_generics: #default_use_generics,
+                    const_fns: { #(#const_fns)* },
+                }
+            }
         }
     };
     output.pretty_print();
