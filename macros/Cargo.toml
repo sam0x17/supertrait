@@ -11,7 +11,7 @@ repository = "https://github.com/sam0x17/supertrait"
 proc-macro = true
 
 [dependencies]
-syn = { version = "2", features = ["full"] }
+syn = { version = "2", features = ["full", "visit"] }
 quote = "1"
 proc-macro2 = "1"
 proc-utils = "0"

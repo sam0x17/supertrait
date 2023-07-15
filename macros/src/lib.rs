@@ -8,11 +8,16 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
-    parse2, parse_quote, GenericParam, Ident, ItemTrait, LifetimeParam, Result, TraitItem,
-    TraitItemFn, TraitItemType,
+    parse2, parse_quote,
+    visit::Visit,
+    GenericParam, Generics, Ident, ItemTrait, LifetimeParam, Result, TraitItem, TraitItemFn,
+    TraitItemType, WhereClause, WherePredicate,
 };
 
 use proc_utils::PrettyPrint;
+
+mod generic_visitor;
+use generic_visitor::*;
 
 struct SuperTraitDef {
     pub orig_trait: ItemTrait,
@@ -49,6 +54,67 @@ impl Parse for SuperTraitDef {
     }
 }
 
+struct FilteredGenerics {
+    /// Represents the `#` in `impl<*> Something for MyStruct<#>`. Both variants share the same
+    /// where clause
+    use_generics: Generics,
+    /// Represents the `*` in `impl<*> Something for MyStruct<#>`. Both variants share the same
+    /// where clause
+    impl_generics: Generics,
+}
+
+fn filter_generics(generics: &Generics, whitelist: &HashSet<GenericUsage>) -> FilteredGenerics {
+    let filtered_generic_params = generics
+        .params
+        .iter()
+        .cloned()
+        .filter(|g| whitelist.contains(&g.into()));
+
+    // generate a version of the where clause containing only whitelisted usages
+    let filtered_where_clause = match &generics.where_clause {
+        Some(where_clause) => {
+            let mut where_clause = where_clause.clone();
+            let predicates_filtered = where_clause.predicates.iter().filter(|p| match *p {
+                WherePredicate::Lifetime(lifetime) => {
+                    whitelist.contains(&GenericUsage::from_lifetime(&lifetime.lifetime))
+                }
+                WherePredicate::Type(typ) => {
+                    whitelist.contains(&GenericUsage::from_type(&typ.bounded_ty))
+                }
+                _ => unimplemented!(),
+            });
+            where_clause.predicates = parse_quote!(#(#predicates_filtered),*);
+            Some(where_clause)
+        }
+        None => None,
+    };
+
+    let use_generic_params = filtered_generic_params.clone().map(|g| match g {
+        GenericParam::Lifetime(lifetime) => lifetime.lifetime.to_token_stream(),
+        GenericParam::Type(typ) => typ.ident.to_token_stream(),
+        GenericParam::Const(constant) => constant.ident.to_token_stream(),
+    });
+
+    let use_generics = Generics {
+        lt_token: parse_quote!(<),
+        params: parse_quote!(#(#use_generic_params),*),
+        gt_token: parse_quote!(>),
+        where_clause: filtered_where_clause.clone(),
+    };
+
+    let impl_generics = Generics {
+        lt_token: parse_quote!(<),
+        params: parse_quote!(#(#filtered_generic_params),*),
+        gt_token: parse_quote!(>),
+        where_clause: filtered_where_clause,
+    };
+
+    FilteredGenerics {
+        use_generics,
+        impl_generics,
+    }
+}
+
 #[proc_macro_attribute]
 pub fn supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
     match supertrait_internal(attr, tokens) {
@@ -65,8 +131,6 @@ fn supertrait_internal(
     let mut modified_trait = def.orig_trait;
     modified_trait.items = def.other_items;
     let ident = modified_trait.ident.clone();
-    modified_trait.ident = parse_quote!(Trait);
-    modified_trait.supertraits.push(parse_quote!(DefaultTypes));
     let attrs = modified_trait.attrs.clone();
     let defaults = def.types_with_defaults;
     let unfilled_defaults = defaults
@@ -77,22 +141,26 @@ fn supertrait_internal(
             typ
         })
         .collect::<Vec<_>>();
-    let mut seen_generics: HashSet<String> = HashSet::new();
+    let mut visitor = FindGenericParam::new(&modified_trait.generics);
     for trait_item_type in &defaults {
-        for generic in &trait_item_type.generics.params {
-            seen_generics.insert(generic.to_token_stream().to_string());
-        }
-        for bound in &trait_item_type.bounds {
-            match bound {
-                syn::TypeParamBound::Trait(_) => todo!(),
-                syn::TypeParamBound::Lifetime(_) => todo!(),
-                syn::TypeParamBound::Verbatim(_) => todo!(),
-                _ => todo!(),
-            }
-        }
+        visitor.visit_trait_item_type(&trait_item_type)
     }
+    println!("subjects: {:?}", visitor.subjects);
+    println!("usages: {:?}", visitor.usages);
+
+    let default_generics = filter_generics(&modified_trait.generics, &visitor.usages);
+
+    let default_impl_generics = default_generics.impl_generics;
+    let default_use_generics = default_generics.use_generics;
+
+    modified_trait.ident = parse_quote!(Trait);
+    modified_trait
+        .supertraits
+        .push(parse_quote!(DefaultTypes #default_use_generics));
+
     let output = quote! {
         #(#attrs)*
+        #[allow(non_snake_case)]
         pub mod #ident {
             use super::*;
 
@@ -102,11 +170,11 @@ fn supertrait_internal(
             /// A subset of the original [`Trait`] containing just the default associated types
             /// _without_ their defaults. This is automatically implemented on [`Defaults`],
             /// which contains the actual default type values.
-            pub trait DefaultTypes {
+            pub trait DefaultTypes #default_impl_generics {
                 #(#unfilled_defaults)*
             }
 
-            impl DefaultTypes for Defaults {
+            impl #default_impl_generics DefaultTypes #default_use_generics for Defaults {
                 #(#defaults)*
             }
 
@@ -115,29 +183,4 @@ fn supertrait_internal(
     };
     output.pretty_print();
     Ok(output)
-}
-
-trait GetUsedGenerics {
-    fn get_used_generics(&self) -> HashSet<String>;
-}
-
-impl GetUsedGenerics for GenericParam {
-    fn get_used_generics(&self) -> HashSet<String> {
-        match self {
-            GenericParam::Lifetime(val) => val.get_used_generics(),
-            GenericParam::Type(val) => todo!(),
-            GenericParam::Const(val) => todo!(),
-        }
-    }
-}
-
-impl GetUsedGenerics for LifetimeParam {
-    fn get_used_generics(&self) -> HashSet<String> {
-        let mut lifetimes: HashSet<String> = HashSet::new();
-        lifetimes.insert(self.lifetime.to_string());
-        for bound in &self.bounds {
-            lifetimes.insert(bound.to_string());
-        }
-        lifetimes
-    }
 }
