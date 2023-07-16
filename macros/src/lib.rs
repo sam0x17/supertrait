@@ -7,8 +7,8 @@ use syn::{
     parse::{Nothing, Parse, ParseStream},
     parse2, parse_quote,
     visit::Visit,
-    GenericParam, Generics, ItemImpl, ItemTrait, Result, TraitItem, TraitItemFn, TraitItemType,
-    WherePredicate,
+    GenericParam, Generics, ItemFn, ItemImpl, ItemTrait, Result, TraitItem, TraitItemFn,
+    TraitItemType, WherePredicate,
 };
 
 use proc_utils::PrettyPrint;
@@ -171,6 +171,10 @@ fn supertrait_internal(
     };
 
     let const_fns = def.const_fns;
+    let mut trait_impl_generics_fn: ItemFn = parse_quote! { fn trait_impl_generics() {} };
+    let mut trait_use_generics_fn: ItemFn = parse_quote! { fn trait_use_generics() {} };
+    let mut default_impl_generics_fn: ItemFn = parse_quote! { fn default_impl_generics() {} };
+    let mut default_use_generics_fn: ItemFn = parse_quote! { fn default_use_generics() {} };
 
     let output = quote! {
         #(#attrs)*
@@ -193,11 +197,25 @@ fn supertrait_internal(
             }
 
             #modified_trait
+
+            #[::supertrait::__private::macro_magic::export_tokens_no_emit]
+            mod exported_tokens {
+                trait ConstFns {
+                    #(#const_fns)*
+                }
+
+                #trait_impl_generics_fn
+                #trait_use_generics_fn
+                #default_impl_generics_fn
+                #default_use_generics_fn
+            }
         }
     };
     output.pretty_print();
     Ok(output)
 }
+
+struct SuperTraitMetadataDef {}
 
 #[import_tokens_attr(::supertrait::__private::macro_magic)]
 #[proc_macro_attribute]
@@ -214,6 +232,7 @@ fn impl_supertrait_internal(
     item_tokens: impl Into<TokenStream2>,
 ) -> Result<TokenStream2> {
     let item_impl = parse2::<ItemImpl>(item_tokens.into())?;
+
     let output = quote! {};
     Ok(output)
 }
