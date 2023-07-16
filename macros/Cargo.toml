@@ -15,3 +15,5 @@ syn = { version = "2", features = ["full", "visit"] }
 quote = "1"
 proc-macro2 = "1"
 proc-utils = "0"
+macro_magic = { version = "0.4", features = ["proc_support"] }
+

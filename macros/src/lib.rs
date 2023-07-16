@@ -1,17 +1,14 @@
-use std::{
-    collections::HashSet,
-    hash::{Hash, Hasher},
-};
-
+use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
+use std::collections::HashSet;
 use syn::{
-    parse::{Parse, ParseStream},
+    parse::{Nothing, Parse, ParseStream},
     parse2, parse_quote,
     visit::Visit,
-    GenericParam, Generics, Ident, ItemTrait, LifetimeParam, Result, TraitItem, TraitItemFn,
-    TraitItemType, WhereClause, WherePredicate,
+    GenericParam, Generics, ItemImpl, ItemTrait, Result, TraitItem, TraitItemFn, TraitItemType,
+    WherePredicate,
 };
 
 use proc_utils::PrettyPrint;
@@ -127,6 +124,7 @@ fn supertrait_internal(
     attr: impl Into<TokenStream2>,
     tokens: impl Into<TokenStream2>,
 ) -> Result<TokenStream2> {
+    parse2::<Nothing>(attr.into())?;
     let def = parse2::<SuperTraitDef>(tokens.into())?;
     let mut modified_trait = def.orig_trait;
     modified_trait.items = def.other_items;
@@ -195,18 +193,27 @@ fn supertrait_internal(
             }
 
             #modified_trait
-
-            macro_rules! __send_tokens {
-                ($callback: path) => {
-                    trait_impl_generics: #trait_impl_generics,
-                    trait_use_generics: #trait_use_generics,
-                    default_impl_generics: #default_impl_generics,
-                    default_use_generics: #default_use_generics,
-                    const_fns: { #(#const_fns)* },
-                }
-            }
         }
     };
     output.pretty_print();
+    Ok(output)
+}
+
+#[import_tokens_attr(::supertrait::__private::macro_magic)]
+#[proc_macro_attribute]
+pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+    match impl_supertrait_internal(__custom_tokens, attr, tokens) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.into_compile_error().into(),
+    }
+}
+
+fn impl_supertrait_internal(
+    custom_tokens: impl Into<TokenStream2>,
+    foreign_tokens: impl Into<TokenStream2>,
+    item_tokens: impl Into<TokenStream2>,
+) -> Result<TokenStream2> {
+    let item_impl = parse2::<ItemImpl>(item_tokens.into())?;
+    let output = quote! {};
     Ok(output)
 }
