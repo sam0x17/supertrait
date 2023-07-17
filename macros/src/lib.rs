@@ -1,6 +1,6 @@
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_utils::PrettyPrint;
 use quote::{quote, ToTokens};
 use std::collections::HashSet;
@@ -9,8 +9,8 @@ use syn::{
     parse2, parse_macro_input, parse_quote,
     spanned::Spanned,
     visit::Visit,
-    Error, GenericParam, Generics, ItemFn, ItemImpl, ItemMod, ItemTrait, Result, TraitItem,
-    TraitItemFn, TraitItemType, WherePredicate,
+    Error, GenericParam, Generics, Ident, Item, ItemFn, ItemImpl, ItemMod, ItemTrait, Result,
+    Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
 };
 
 mod generic_visitor;
@@ -258,14 +258,118 @@ pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
     }
 */
 
+struct ExportedTokens {
+    const_fns: Vec<TraitItemFn>,
+    trait_impl_generics: Generics,
+    trait_use_generics: Generics,
+    default_impl_generics: Generics,
+    default_use_generics: Generics,
+}
+
+impl TryFrom<ItemMod> for ExportedTokens {
+    type Error = Error;
+
+    fn try_from(item_mod: ItemMod) -> std::result::Result<Self, Self::Error> {
+        if item_mod.ident != "exported_tokens" {
+            return Err(Error::new(
+                item_mod.ident.span(),
+                "expected `exported_tokens`.",
+            ));
+        }
+        let item_mod_span = item_mod.span();
+        let Some((_, main_body)) = item_mod.content else {
+            return Err(Error::new(
+                item_mod_span,
+                "`exported_tokens` module must have a defined body."
+            ));
+        };
+        let Some(Item::Trait(ItemTrait { ident: const_fns_ident, items: const_fns, ..})) = main_body.get(0) else {
+            return Err(Error::new(
+                item_mod_span,
+                "the first item in `exported_tokens` should be a trait called `ConstFns`.",
+            ));
+        };
+        if const_fns_ident != "ConstFns" {
+            return Err(Error::new(const_fns_ident.span(), "expected `ConstFns`."));
+        }
+
+        let const_fns: Vec<TraitItemFn> = const_fns
+            .into_iter()
+            .map(|item| match item {
+                TraitItem::Fn(trait_item_fn) => Ok(trait_item_fn.clone()),
+                _ => return Err(Error::new(item.span(), "expected `fn`")), // can't do this
+            })
+            .collect::<std::result::Result<_, Self::Error>>()?;
+
+        let Some(Item::Fn(ItemFn { sig: Signature { ident: trait_impl_generics_ident, generics: trait_impl_generics, .. }, .. })) = main_body.get(1) else {
+            return Err(Error::new(
+                item_mod_span,
+                "the second item in `exported_tokens` should be an fn called `trait_impl_generics`.",
+            ));
+        };
+        if trait_impl_generics_ident != "trait_impl_generics" {
+            return Err(Error::new(
+                trait_impl_generics_ident.span(),
+                "expected `trait_impl_generics`.",
+            ));
+        }
+
+        let Some(Item::Fn(ItemFn { sig: Signature { ident: trait_use_generics_ident, generics: trait_use_generics, .. }, .. })) = main_body.get(2) else {
+            return Err(Error::new(
+                item_mod_span,
+                "the third item in `exported_tokens` should be an fn called `trait_use_generics`.",
+            ));
+        };
+        if trait_use_generics_ident != "trait_use_generics" {
+            return Err(Error::new(
+                trait_use_generics_ident.span(),
+                "expected `trait_use_generics`.",
+            ));
+        }
+
+        let Some(Item::Fn(ItemFn { sig: Signature { ident: default_impl_generics_ident, generics: default_impl_generics, .. }, .. })) = main_body.get(3) else {
+            return Err(Error::new(
+                item_mod_span,
+                "the fourth item in `exported_tokens` should be an fn called `default_impl_generics`.",
+            ));
+        };
+        if default_impl_generics_ident != "default_impl_generics" {
+            return Err(Error::new(
+                default_impl_generics_ident.span(),
+                "expected `default_impl_generics`.",
+            ));
+        }
+
+        let Some(Item::Fn(ItemFn { sig: Signature { ident: default_use_generics_ident, generics: default_use_generics, .. }, .. })) = main_body.get(4) else {
+            return Err(Error::new(
+                item_mod_span,
+                "the fifth item in `exported_tokens` should be an fn called `default_use_generics`.",
+            ));
+        };
+        if default_use_generics_ident != "default_use_generics" {
+            return Err(Error::new(
+                default_use_generics_ident.span(),
+                "expected `default_use_generics`.",
+            ));
+        }
+
+        Ok(ExportedTokens {
+            const_fns,
+            trait_impl_generics: trait_impl_generics.clone(),
+            trait_use_generics: trait_use_generics.clone(),
+            default_impl_generics: default_impl_generics.clone(),
+            default_use_generics: default_use_generics.clone(),
+        })
+    }
+}
+
 fn impl_supertrait_internal(
     custom_tokens: impl Into<TokenStream2>,
     foreign_tokens: impl Into<TokenStream2>,
     item_tokens: impl Into<TokenStream2>,
 ) -> Result<TokenStream2> {
     let item_impl = parse2::<ItemImpl>(item_tokens.into())?;
-    let foreign_tokens = parse2::<ItemMod>(foreign_tokens.into())?;
-    let body = foreign_tokens.content.unwrap().1;
+    let foreign = ExportedTokens::try_from(parse2::<ItemMod>(foreign_tokens.into())?)?;
     let output = quote! {};
     Ok(output)
 }
