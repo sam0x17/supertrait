@@ -1,17 +1,17 @@
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
+use proc_utils::PrettyPrint;
 use quote::{quote, ToTokens};
 use std::collections::HashSet;
 use syn::{
     parse::{Nothing, Parse, ParseStream},
-    parse2, parse_quote,
+    parse2, parse_macro_input, parse_quote,
+    spanned::Spanned,
     visit::Visit,
-    GenericParam, Generics, ItemFn, ItemImpl, ItemTrait, Result, TraitItem, TraitItemFn,
-    TraitItemType, WherePredicate,
+    Error, GenericParam, Generics, ItemFn, ItemImpl, ItemMod, ItemTrait, Result, TraitItem,
+    TraitItemFn, TraitItemType, WherePredicate,
 };
-
-use proc_utils::PrettyPrint;
 
 mod generic_visitor;
 use generic_visitor::*;
@@ -175,6 +175,10 @@ fn supertrait_internal(
     let mut trait_use_generics_fn: ItemFn = parse_quote! { fn trait_use_generics() {} };
     let mut default_impl_generics_fn: ItemFn = parse_quote! { fn default_impl_generics() {} };
     let mut default_use_generics_fn: ItemFn = parse_quote! { fn default_use_generics() {} };
+    trait_impl_generics_fn.sig.generics = trait_impl_generics;
+    trait_use_generics_fn.sig.generics = trait_use_generics;
+    default_impl_generics_fn.sig.generics = default_impl_generics.clone();
+    default_use_generics_fn.sig.generics = default_use_generics.clone();
 
     let output = quote! {
         #(#attrs)*
@@ -215,16 +219,44 @@ fn supertrait_internal(
     Ok(output)
 }
 
-struct SuperTraitMetadataDef {}
-
+#[doc(hidden)]
 #[import_tokens_attr(::supertrait::__private::macro_magic)]
 #[proc_macro_attribute]
-pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
     match impl_supertrait_internal(__custom_tokens, attr, tokens) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.into_compile_error().into(),
     }
 }
+
+#[proc_macro_attribute]
+pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+    let item_impl = parse_macro_input!(tokens as ItemImpl);
+    let trait_being_impled = match item_impl.trait_.clone() {
+        Some((_, path, _)) => path,
+        None => return Error::new(
+            item_impl.span(),
+            "Supertrait impls must have a trait being implemented. Inherent impls are not supported."
+        ).into_compile_error().into(),
+    };
+    quote! {
+        #[::supertrait::__impl_supertrait(#trait_being_impled::exported_tokens)]
+        #item_impl
+    }
+    .into()
+}
+
+/*
+    mod exported_tokens {
+        trait ConstFns {
+            const fn something_else() -> usize;
+        }
+        fn trait_impl_generics() {}
+        fn trait_use_generics() {}
+        fn default_impl_generics() {}
+        fn default_use_generics() {}
+    }
+*/
 
 fn impl_supertrait_internal(
     custom_tokens: impl Into<TokenStream2>,
@@ -232,7 +264,8 @@ fn impl_supertrait_internal(
     item_tokens: impl Into<TokenStream2>,
 ) -> Result<TokenStream2> {
     let item_impl = parse2::<ItemImpl>(item_tokens.into())?;
-
+    let foreign_tokens = parse2::<ItemMod>(foreign_tokens.into())?;
+    let body = foreign_tokens.content.unwrap().1;
     let output = quote! {};
     Ok(output)
 }

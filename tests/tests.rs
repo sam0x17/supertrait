@@ -14,9 +14,9 @@ pub trait MyTrait<T: Copy, I: Copy> {
 // }
 // pub struct SomeStruct;
 
-// #[impl_supertrait]
-// impl<T: Copy, I: Copy> MyTrait for SomeStruct {
-//     fn some_method(something: T) -> T {
-//         something
-//     }
-// }
+#[impl_supertrait]
+impl<T: Copy, I: Copy> MyTrait for SomeStruct {
+    fn some_method(something: T) -> T {
+        something
+    }
+}
