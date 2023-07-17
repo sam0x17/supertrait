@@ -9,7 +9,7 @@ use syn::{
     parse2, parse_macro_input, parse_quote,
     spanned::Spanned,
     visit::Visit,
-    Error, GenericParam, Generics, Ident, Item, ItemFn, ItemImpl, ItemMod, ItemTrait, Result,
+    Error, GenericParam, Generics, Ident, Item, ItemFn, ItemImpl, ItemMod, ItemTrait, Path, Result,
     Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
 };
 
@@ -221,6 +221,7 @@ fn supertrait_internal(
 
 #[doc(hidden)]
 #[import_tokens_attr(::supertrait::__private::macro_magic)]
+#[allow(non_snake_case)]
 #[proc_macro_attribute]
 pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
     match impl_supertrait_internal(__custom_tokens, attr, tokens) {
@@ -258,7 +259,7 @@ pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
     }
 */
 
-struct ExportedTokens {
+struct ImportedTokens {
     const_fns: Vec<TraitItemFn>,
     trait_impl_generics: Generics,
     trait_use_generics: Generics,
@@ -266,7 +267,7 @@ struct ExportedTokens {
     default_use_generics: Generics,
 }
 
-impl TryFrom<ItemMod> for ExportedTokens {
+impl TryFrom<ItemMod> for ImportedTokens {
     type Error = Error;
 
     fn try_from(item_mod: ItemMod) -> std::result::Result<Self, Self::Error> {
@@ -283,7 +284,10 @@ impl TryFrom<ItemMod> for ExportedTokens {
                 "`exported_tokens` module must have a defined body."
             ));
         };
-        let Some(Item::Trait(ItemTrait { ident: const_fns_ident, items: const_fns, ..})) = main_body.get(0) else {
+        let Some(Item::Trait(ItemTrait {
+            ident: const_fns_ident,
+            items: const_fns,
+        ..})) = main_body.get(0) else {
             return Err(Error::new(
                 item_mod_span,
                 "the first item in `exported_tokens` should be a trait called `ConstFns`.",
@@ -301,7 +305,11 @@ impl TryFrom<ItemMod> for ExportedTokens {
             })
             .collect::<std::result::Result<_, Self::Error>>()?;
 
-        let Some(Item::Fn(ItemFn { sig: Signature { ident: trait_impl_generics_ident, generics: trait_impl_generics, .. }, .. })) = main_body.get(1) else {
+        let Some(Item::Fn(ItemFn { sig: Signature {
+            ident: trait_impl_generics_ident,
+            generics: trait_impl_generics,
+            ..
+        }, .. })) = main_body.get(1) else {
             return Err(Error::new(
                 item_mod_span,
                 "the second item in `exported_tokens` should be an fn called `trait_impl_generics`.",
@@ -314,7 +322,11 @@ impl TryFrom<ItemMod> for ExportedTokens {
             ));
         }
 
-        let Some(Item::Fn(ItemFn { sig: Signature { ident: trait_use_generics_ident, generics: trait_use_generics, .. }, .. })) = main_body.get(2) else {
+        let Some(Item::Fn(ItemFn { sig: Signature {
+            ident: trait_use_generics_ident,
+            generics: trait_use_generics,
+            ..
+        }, .. })) = main_body.get(2) else {
             return Err(Error::new(
                 item_mod_span,
                 "the third item in `exported_tokens` should be an fn called `trait_use_generics`.",
@@ -327,7 +339,11 @@ impl TryFrom<ItemMod> for ExportedTokens {
             ));
         }
 
-        let Some(Item::Fn(ItemFn { sig: Signature { ident: default_impl_generics_ident, generics: default_impl_generics, .. }, .. })) = main_body.get(3) else {
+        let Some(Item::Fn(ItemFn { sig: Signature {
+            ident: default_impl_generics_ident,
+            generics: default_impl_generics,
+            ..
+        }, .. })) = main_body.get(3) else {
             return Err(Error::new(
                 item_mod_span,
                 "the fourth item in `exported_tokens` should be an fn called `default_impl_generics`.",
@@ -340,7 +356,11 @@ impl TryFrom<ItemMod> for ExportedTokens {
             ));
         }
 
-        let Some(Item::Fn(ItemFn { sig: Signature { ident: default_use_generics_ident, generics: default_use_generics, .. }, .. })) = main_body.get(4) else {
+        let Some(Item::Fn(ItemFn { sig: Signature {
+            ident: default_use_generics_ident,
+            generics: default_use_generics,
+            ..
+        }, .. })) = main_body.get(4) else {
             return Err(Error::new(
                 item_mod_span,
                 "the fifth item in `exported_tokens` should be an fn called `default_use_generics`.",
@@ -353,7 +373,7 @@ impl TryFrom<ItemMod> for ExportedTokens {
             ));
         }
 
-        Ok(ExportedTokens {
+        Ok(ImportedTokens {
             const_fns,
             trait_impl_generics: trait_impl_generics.clone(),
             trait_use_generics: trait_use_generics.clone(),
@@ -363,13 +383,62 @@ impl TryFrom<ItemMod> for ExportedTokens {
     }
 }
 
+/*
+// expanded from `#[impl_supertrait]`:
+impl<I: Copy> MyTrait::DefaultTypes<I> for SomeStruct {
+    type Something = <MyTrait::Defaults as MyTrait::DefaultTypes<I>>::Something;
+    type SomethingOverriden = bool;
+}
+
+// expanded from `#[impl_supertrait]`:
+impl<T: Copy, I: Copy> MyTrait::Trait<T, I> for SomeStruct {
+    fn some_method(something: T) -> T {
+        something
+    }
+}
+
+*/
+
 fn impl_supertrait_internal(
     custom_tokens: impl Into<TokenStream2>,
     foreign_tokens: impl Into<TokenStream2>,
     item_tokens: impl Into<TokenStream2>,
 ) -> Result<TokenStream2> {
-    let item_impl = parse2::<ItemImpl>(item_tokens.into())?;
-    let foreign = ExportedTokens::try_from(parse2::<ItemMod>(foreign_tokens.into())?)?;
-    let output = quote! {};
+    let mut item_impl = parse2::<ItemImpl>(item_tokens.into())?;
+    let Some((_, trait_path, _)) = &mut item_impl.trait_ else {
+        return Err(Error::new(
+            item_impl.span(),
+            "#[impl_supertrait] can only be attached to non-inherent impls involving a trait \
+            that has `#[supertrait]` attached to it."
+        ));
+    };
+    let impl_target = item_impl.self_ty.clone();
+
+    let ImportedTokens {
+        const_fns,
+        trait_impl_generics,
+        trait_use_generics,
+        default_impl_generics,
+        default_use_generics,
+    } = ImportedTokens::try_from(parse2::<ItemMod>(foreign_tokens.into())?)?;
+
+    let trait_mod = trait_path.clone();
+    *trait_path = parse_quote!(#trait_mod::Trait #trait_use_generics);
+
+    let default_impl: ItemImpl = parse_quote! {
+        impl #default_impl_generics #trait_mod::DefaultTypes #default_use_generics for #impl_target {
+            type Something = <#trait_mod::Defaults as #trait_mod::DefaultTypes<I>>::Something;
+            type SomethingOverridden = bool;
+        }
+    };
+
+    let output = quote! {
+
+        #item_impl
+
+        #default_impl
+    };
+    println!("impl:");
+    output.pretty_print();
     Ok(output)
 }
