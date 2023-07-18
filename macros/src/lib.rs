@@ -481,7 +481,7 @@ fn impl_supertrait_internal(
         .filter_map(|item| item.get_ident())
         .collect();
 
-    let mut final_default_items: HashMap<Ident, ImplItem> = HashMap::new();
+    let mut final_items: HashMap<Ident, ImplItem> = HashMap::new();
     for item in default_items {
         let item_ident = item.get_ident().unwrap();
         let mut item: ImplItem = parse_quote!(#item);
@@ -495,29 +495,25 @@ fn impl_supertrait_internal(
             }
             _ => unimplemented!("this item has no notion of defaults"),
         }
-        final_default_items.insert(item_ident, item);
+        final_items.insert(item_ident, item);
     }
+    let mut final_verbatim_items: Vec<ImplItem> = Vec::new();
     for item in &item_impl.items {
-        let Some(item_ident) = item.get_ident() else { continue };
-        if !default_items_set.contains(&item_ident) {
+        let Some(item_ident) = item.get_ident() else {
+            final_verbatim_items.push(item.clone());
             continue;
-        }
-        final_default_items.insert(item_ident, item.clone());
+        };
+        final_items.insert(item_ident, item.clone());
     }
 
-    let final_default_items = final_default_items.values();
+    let mut final_items = final_items.values().cloned().collect::<Vec<_>>();
+    final_items.extend(final_verbatim_items);
 
-    let default_impl: ItemImpl = parse_quote! {
-        impl #trait_impl_generics #trait_mod::DefaultTypes #default_use_generics for #impl_target {
-            #(#final_default_items)*
-        }
-    };
+    item_impl.items = final_items;
 
     let output = quote! {
 
         #item_impl
-
-        #default_impl
 
         use #trait_mod::DefaultTypes;
         use #trait_mod::Trait;
