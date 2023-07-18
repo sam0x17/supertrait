@@ -3,14 +3,14 @@ use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_utils::PrettyPrint;
 use quote::{quote, ToTokens};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use syn::{
     parse::{Nothing, Parse, ParseStream},
     parse2, parse_macro_input, parse_quote,
     spanned::Spanned,
     visit::Visit,
-    Error, GenericParam, Generics, Ident, Item, ItemFn, ItemImpl, ItemMod, ItemTrait, Path, Result,
-    Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
+    Error, GenericParam, Generics, Ident, ImplItem, Item, ItemFn, ItemImpl, ItemMod, ItemTrait,
+    Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
 };
 
 mod generic_visitor;
@@ -152,9 +152,9 @@ fn supertrait_internal(
     let default_use_generics = default_generics.use_generics;
 
     modified_trait.ident = parse_quote!(Trait);
-    modified_trait
-        .supertraits
-        .push(parse_quote!(DefaultTypes #default_use_generics));
+    // modified_trait
+    //     .supertraits
+    //     .push(parse_quote!(DefaultTypes #default_use_generics));
 
     let trait_use_generic_params = modified_trait.generics.params.iter().map(|g| match g {
         GenericParam::Lifetime(lifetime) => lifetime.lifetime.to_token_stream(),
@@ -179,6 +179,10 @@ fn supertrait_internal(
     trait_use_generics_fn.sig.generics = trait_use_generics;
     default_impl_generics_fn.sig.generics = default_impl_generics.clone();
     default_use_generics_fn.sig.generics = default_use_generics.clone();
+
+    modified_trait
+        .items
+        .extend(unfilled_defaults.iter().map(|item| parse_quote!(#item)));
 
     let output = quote! {
         #(#attrs)*
@@ -212,6 +216,10 @@ fn supertrait_internal(
                 #trait_use_generics_fn
                 #default_impl_generics_fn
                 #default_use_generics_fn
+
+                mod default_items {
+                    #(#defaults)*
+                }
             }
         }
     };
@@ -247,24 +255,13 @@ pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
     .into()
 }
 
-/*
-    mod exported_tokens {
-        trait ConstFns {
-            const fn something_else() -> usize;
-        }
-        fn trait_impl_generics() {}
-        fn trait_use_generics() {}
-        fn default_impl_generics() {}
-        fn default_use_generics() {}
-    }
-*/
-
 struct ImportedTokens {
     const_fns: Vec<TraitItemFn>,
     trait_impl_generics: Generics,
     trait_use_generics: Generics,
     default_impl_generics: Generics,
     default_use_generics: Generics,
+    default_items: Vec<TraitItem>,
 }
 
 impl TryFrom<ItemMod> for ImportedTokens {
@@ -373,12 +370,36 @@ impl TryFrom<ItemMod> for ImportedTokens {
             ));
         }
 
+        let Some(Item::Mod(default_items_mod)) = main_body.get(5) else {
+            return Err(Error::new(
+                item_mod_span,
+                "the sixth item in `exported_tokens` should be a module called `default_items_mod`.",
+            ));
+        };
+        if default_items_mod.ident != "default_items" {
+            return Err(Error::new(
+                default_items_mod.ident.span(),
+                "expected `default_items`.",
+            ));
+        }
+        let Some((_, default_items)) = default_items_mod.content.clone() else {
+            return Err(Error::new(
+                default_items_mod.ident.span(),
+                "`default_items` item must be an inline module.",
+            ));
+        };
+        let default_items: Vec<TraitItem> = default_items
+            .iter()
+            .map(|item| parse_quote!(#item))
+            .collect();
+
         Ok(ImportedTokens {
             const_fns,
             trait_impl_generics: trait_impl_generics.clone(),
             trait_use_generics: trait_use_generics.clone(),
             default_impl_generics: default_impl_generics.clone(),
             default_use_generics: default_use_generics.clone(),
+            default_items: default_items,
         })
     }
 }
@@ -398,6 +419,34 @@ impl<T: Copy, I: Copy> MyTrait::Trait<T, I> for SomeStruct {
 }
 
 */
+
+trait GetIdent {
+    fn get_ident(&self) -> Option<Ident>;
+}
+
+impl GetIdent for TraitItem {
+    fn get_ident(&self) -> Option<Ident> {
+        use TraitItem::*;
+        match self {
+            Const(item_const) => Some(item_const.ident.clone()),
+            Fn(item_fn) => Some(item_fn.sig.ident.clone()),
+            Type(item_type) => Some(item_type.ident.clone()),
+            _ => None,
+        }
+    }
+}
+
+impl GetIdent for ImplItem {
+    fn get_ident(&self) -> Option<Ident> {
+        use ImplItem::*;
+        match self {
+            Const(item_const) => Some(item_const.ident.clone()),
+            Fn(item_fn) => Some(item_fn.sig.ident.clone()),
+            Type(item_type) => Some(item_type.ident.clone()),
+            _ => None,
+        }
+    }
+}
 
 fn impl_supertrait_internal(
     custom_tokens: impl Into<TokenStream2>,
@@ -420,15 +469,47 @@ fn impl_supertrait_internal(
         trait_use_generics,
         default_impl_generics,
         default_use_generics,
+        default_items,
     } = ImportedTokens::try_from(parse2::<ItemMod>(foreign_tokens.into())?)?;
 
     let trait_mod = trait_path.clone();
     *trait_path = parse_quote!(#trait_mod::Trait #trait_use_generics);
 
+    let default_items_set: HashSet<Ident> = default_items
+        .iter()
+        .cloned()
+        .filter_map(|item| item.get_ident())
+        .collect();
+
+    let mut final_default_items: HashMap<Ident, ImplItem> = HashMap::new();
+    for item in default_items {
+        let item_ident = item.get_ident().unwrap();
+        let mut item: ImplItem = parse_quote!(#item);
+        use ImplItem::*;
+        match &mut item {
+            Const(item_const) => {
+                item_const.expr = parse_quote!(<#trait_mod::Defaults as #trait_mod::DefaultTypes #default_use_generics>::#item_ident)
+            }
+            Type(item_type) => {
+                item_type.ty = parse_quote!(<#trait_mod::Defaults as #trait_mod::DefaultTypes #default_use_generics>::#item_ident)
+            }
+            _ => unimplemented!("this item has no notion of defaults"),
+        }
+        final_default_items.insert(item_ident, item);
+    }
+    for item in &item_impl.items {
+        let Some(item_ident) = item.get_ident() else { continue };
+        if !default_items_set.contains(&item_ident) {
+            continue;
+        }
+        final_default_items.insert(item_ident, item.clone());
+    }
+
+    let final_default_items = final_default_items.values();
+
     let default_impl: ItemImpl = parse_quote! {
-        impl #default_impl_generics #trait_mod::DefaultTypes #default_use_generics for #impl_target {
-            type Something = <#trait_mod::Defaults as #trait_mod::DefaultTypes<I>>::Something;
-            type SomethingOverridden = bool;
+        impl #trait_impl_generics #trait_mod::DefaultTypes #default_use_generics for #impl_target {
+            #(#final_default_items)*
         }
     };
 
@@ -437,6 +518,9 @@ fn impl_supertrait_internal(
         #item_impl
 
         #default_impl
+
+        use #trait_mod::DefaultTypes;
+        use #trait_mod::Trait;
     };
     println!("impl:");
     output.pretty_print();
