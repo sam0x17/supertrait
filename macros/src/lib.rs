@@ -1,7 +1,7 @@
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
-use proc_utils::PrettyPrint;
+// use proc_utils::PrettyPrint;
 use quote::{format_ident, quote, ToTokens};
 use std::collections::{HashMap, HashSet};
 use syn::{
@@ -10,7 +10,8 @@ use syn::{
     spanned::Spanned,
     visit::Visit,
     Error, GenericParam, Generics, Ident, ImplItem, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod,
-    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
+    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, Visibility,
+    WherePredicate,
 };
 
 mod generic_visitor;
@@ -170,7 +171,7 @@ fn supertrait_internal(
     let mut trait_use_generics_fn: ItemFn = parse_quote! { fn trait_use_generics() {} };
     let mut default_impl_generics_fn: ItemFn = parse_quote! { fn default_impl_generics() {} };
     let mut default_use_generics_fn: ItemFn = parse_quote! { fn default_use_generics() {} };
-    trait_impl_generics_fn.sig.generics = trait_impl_generics;
+    trait_impl_generics_fn.sig.generics = trait_impl_generics.clone();
     trait_use_generics_fn.sig.generics = trait_use_generics;
     default_impl_generics_fn.sig.generics = default_impl_generics.clone();
     default_use_generics_fn.sig.generics = default_use_generics.clone();
@@ -178,6 +179,14 @@ fn supertrait_internal(
     modified_trait
         .items
         .extend(unfilled_defaults.iter().map(|item| parse_quote!(#item)));
+
+    let converted_const_fns = const_fns.iter().map(|const_fn| {
+        let mut item = const_fn.clone();
+        item.sig.constness = None;
+        let item: TraitItem = parse_quote!(#item);
+        item
+    });
+    modified_trait.items.extend(converted_const_fns);
 
     let output = quote! {
         #(#attrs)*
@@ -218,7 +227,7 @@ fn supertrait_internal(
             }
         }
     };
-    output.pretty_print();
+    // output.pretty_print();
     Ok(output)
 }
 
@@ -255,6 +264,7 @@ pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 struct ImportedTokens {
     const_fns: Vec<TraitItemFn>,
     trait_impl_generics: Generics,
+    #[allow(unused)]
     trait_use_generics: Generics,
     #[allow(unused)]
     default_impl_generics: Generics,
@@ -498,16 +508,17 @@ fn impl_supertrait_internal(
     let ImportedTokens {
         const_fns,
         trait_impl_generics,
-        trait_use_generics,
+        trait_use_generics: _,
         default_impl_generics: _,
         default_use_generics,
         default_items,
     } = ImportedTokens::try_from(parse2::<ItemMod>(foreign_tokens.into())?)?;
 
     let trait_mod = trait_path.clone().strip_trailing_generics();
-    *trait_path = parse_quote!(#trait_mod::Trait #trait_use_generics);
-
-    item_impl.generics = trait_impl_generics.clone();
+    trait_path
+        .segments
+        .insert(trait_path.segments.len() - 1, parse_quote!(#trait_mod));
+    trait_path.segments.last_mut().unwrap().ident = parse_quote!(Trait);
 
     let mut final_items: HashMap<Ident, ImplItem> = HashMap::new();
     for item in default_items {
@@ -577,6 +588,14 @@ fn impl_supertrait_internal(
         const_fn
     });
 
+    let converted_const_fns = impl_const_fns.clone().map(|const_fn| {
+        let mut const_fn = const_fn.clone();
+        const_fn.sig.constness = None;
+        const_fn.vis = Visibility::Inherited;
+        let item: ImplItem = parse_quote!(#const_fn);
+        item
+    });
+    item_impl.items.extend(converted_const_fns);
     let mut impl_visitor = FindGenericParam::new(&item_impl.generics);
     impl_visitor.visit_item_impl(&item_impl);
     item_impl.generics = filter_generics(&item_impl.generics, &impl_visitor.usages).impl_generics;
@@ -592,7 +611,5 @@ fn impl_supertrait_internal(
         #[allow(unused)]
         use #trait_mod::Trait as #trait_import_name;
     };
-    println!("impl:");
-    output.pretty_print();
     Ok(output)
 }

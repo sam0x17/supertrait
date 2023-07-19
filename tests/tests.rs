@@ -53,8 +53,8 @@ pub trait ConstInto<T> {
 struct AnotherStruct;
 
 #[impl_supertrait]
-impl ConstInto<&str> for AnotherStruct {
-    const fn into_const(&self) -> &str {
+impl ConstInto<&'static str> for AnotherStruct {
+    const fn into_const(&self) -> &'static str {
         "hey"
     }
 }
