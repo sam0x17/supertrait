@@ -1,6 +1,6 @@
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::{Delimiter, Group, Span, TokenStream as TokenStream2, TokenTree};
 use proc_utils::PrettyPrint;
 use quote::{quote, ToTokens};
 use std::collections::{HashMap, HashSet};
@@ -8,6 +8,7 @@ use syn::{
     parse::{Nothing, Parse, ParseStream},
     parse2, parse_macro_input, parse_quote,
     spanned::Spanned,
+    token::Token,
     visit::Visit,
     Error, GenericParam, Generics, Ident, ImplItem, Item, ItemFn, ItemImpl, ItemMod, ItemTrait,
     Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
@@ -475,12 +476,6 @@ fn impl_supertrait_internal(
     let trait_mod = trait_path.clone();
     *trait_path = parse_quote!(#trait_mod::Trait #trait_use_generics);
 
-    let default_items_set: HashSet<Ident> = default_items
-        .iter()
-        .cloned()
-        .filter_map(|item| item.get_ident())
-        .collect();
-
     let mut final_items: HashMap<Ident, ImplItem> = HashMap::new();
     for item in default_items {
         let item_ident = item.get_ident().unwrap();
@@ -508,14 +503,39 @@ fn impl_supertrait_internal(
 
     let mut final_items = final_items.values().cloned().collect::<Vec<_>>();
     final_items.extend(final_verbatim_items);
-
     item_impl.items = final_items;
+
+    let mut impl_const_fn_sigs: HashSet<String> = HashSet::new();
+    let mut impl_const_fns: Vec<ImplItem>;
+    (impl_const_fns, item_impl.items) = item_impl.items.into_iter().partition(|item| {
+        let ImplItem::Fn(impl_item_fn) = item else { return false };
+        if impl_item_fn.sig.constness.is_none() {
+            return false;
+        };
+        impl_const_fn_sigs.insert(impl_item_fn.sig.to_token_stream().to_string());
+        true
+    });
+    for const_fn in impl_const_fns.iter_mut() {
+        let ImplItem::Fn(const_fn) = const_fn else { unreachable!() };
+        const_fn.vis = parse_quote!(pub);
+    }
+    for item in &const_fns {
+        if !impl_const_fn_sigs.contains(&item.sig.to_token_stream().to_string()) {
+            return Err(Error::new(
+                item_impl.span(),
+                format!("missing impl for `{}`.", item.sig.ident),
+            ));
+        }
+    }
 
     let output = quote! {
 
         #item_impl
 
-        use #trait_mod::DefaultTypes;
+        impl #trait_impl_generics #impl_target {
+            #(#impl_const_fns)*
+        }
+
         use #trait_mod::Trait;
     };
     println!("impl:");
