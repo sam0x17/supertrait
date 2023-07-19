@@ -46,9 +46,13 @@ fn test_const_fn_trait_items() {
 }
 
 #[supertrait]
-pub trait AnotherTrait {}
+pub trait ConstInto<T> {
+    const fn into_const(&self) -> T;
+}
 
 struct AnotherStruct;
 
 #[impl_supertrait]
-impl AnotherTrait for AnotherStruct {}
+impl<T> ConstInto<T> for AnotherStruct {
+    const fn into_const(&self) -> T {}
+}

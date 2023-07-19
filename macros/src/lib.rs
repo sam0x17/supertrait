@@ -1,7 +1,7 @@
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
-//use proc_utils::PrettyPrint;
+use proc_utils::PrettyPrint;
 use quote::{format_ident, quote, ToTokens};
 use std::collections::{HashMap, HashSet};
 use syn::{
@@ -10,7 +10,7 @@ use syn::{
     spanned::Spanned,
     visit::Visit,
     Error, GenericParam, Generics, Ident, ImplItem, Item, ItemFn, ItemImpl, ItemMod, ItemTrait,
-    Result, Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
+    Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
 };
 
 mod generic_visitor;
@@ -223,7 +223,7 @@ fn supertrait_internal(
             }
         }
     };
-    // output.pretty_print();
+    output.pretty_print();
     Ok(output)
 }
 
@@ -248,12 +248,13 @@ pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
             item_impl.span(),
             "Supertrait impls must have a trait being implemented. Inherent impls are not supported."
         ).into_compile_error().into(),
-    };
-    quote! {
+    }.strip_trailing_generics();
+    let output = quote! {
         #[::supertrait::__impl_supertrait(#trait_being_impled::exported_tokens)]
         #item_impl
-    }
-    .into()
+    };
+    // output.pretty_print();
+    output.into()
 }
 
 struct ImportedTokens {
@@ -469,6 +470,20 @@ trait ForceGetIdent: ToTokens {
     }
 }
 
+trait StripTrailingGenerics {
+    fn strip_trailing_generics(&self) -> Self;
+}
+
+impl StripTrailingGenerics for Path {
+    fn strip_trailing_generics(&self) -> Self {
+        let mut tmp = self.clone();
+        let Some(last) = tmp.segments.last_mut() else { unreachable!() };
+        let ident = last.ident.clone();
+        *last = parse_quote!(#ident);
+        tmp
+    }
+}
+
 impl<T: ToTokens> ForceGetIdent for T {}
 
 fn impl_supertrait_internal(
@@ -494,7 +509,7 @@ fn impl_supertrait_internal(
         default_items,
     } = ImportedTokens::try_from(parse2::<ItemMod>(foreign_tokens.into())?)?;
 
-    let trait_mod = trait_path.clone();
+    let trait_mod = trait_path.clone().strip_trailing_generics();
     *trait_path = parse_quote!(#trait_mod::Trait #trait_use_generics);
 
     let mut final_items: HashMap<Ident, ImplItem> = HashMap::new();
@@ -549,20 +564,25 @@ fn impl_supertrait_internal(
         }
     }
 
-    let trait_import_name: Ident = format_ident!("{}Trait", item_impl.force_get_ident());
+    let trait_import_name: Ident = format_ident!(
+        "{}{}TraitImpl",
+        impl_target.clone().force_get_ident(),
+        item_impl.trait_.clone().unwrap().1.force_get_ident()
+    );
 
     let output = quote! {
-
         #item_impl
 
-        impl #trait_impl_generics #impl_target {
+        // const fn implementations
+        impl #impl_target { // TODO: #const_fn_generics
             #(#impl_const_fns)*
         }
 
         #[allow(unused)]
         use #trait_mod::Trait as #trait_import_name;
     };
-    // println!("impl:");
-    // output.pretty_print();
+    println!("impl:");
+    println!("{}", output.to_token_stream().to_string());
+    output.pretty_print();
     Ok(output)
 }
