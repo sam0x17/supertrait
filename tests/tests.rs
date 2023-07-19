@@ -4,7 +4,8 @@ use supertrait::*;
 pub trait MyTrait {
     fn some_inherent_method(&self) -> u32;
     type Something = u32; // default associated type
-    const fn something_else() -> usize; // const fn
+    const fn yet_another_thing() -> bool; // const fn
+    const fn something_else(&self) -> usize; // const fn self
     type SomethingOverridden = usize; // default associated type that gets overridden
     const SOME_CONSTANT: u8 = 7;
 }
@@ -19,7 +20,11 @@ impl MyTrait for SomeStruct {
 
     type SomethingOverridden = bool;
 
-    const fn something_else() -> usize {
+    const fn yet_another_thing() -> bool {
+        false
+    }
+
+    const fn something_else(&self) -> usize {
         178
     }
 }
@@ -35,5 +40,7 @@ fn test_default_associated_types() {
 
 #[test]
 fn test_const_fn_trait_items() {
-    const _TEST_CONST: usize = SomeStruct::something_else();
+    const _TEST_CONST_FN: bool = SomeStruct::yet_another_thing();
+    const _SOME_STRUCT: SomeStruct = SomeStruct {};
+    const _TEST_CONST_SELF_FN: usize = _SOME_STRUCT.something_else();
 }

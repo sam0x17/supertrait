@@ -1,17 +1,16 @@
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
-use proc_macro2::{Delimiter, Group, Span, TokenStream as TokenStream2, TokenTree};
-use proc_utils::PrettyPrint;
+use proc_macro2::TokenStream as TokenStream2;
+// use proc_utils::PrettyPrint;
 use quote::{quote, ToTokens};
 use std::collections::{HashMap, HashSet};
 use syn::{
     parse::{Nothing, Parse, ParseStream},
     parse2, parse_macro_input, parse_quote,
     spanned::Spanned,
-    token::Token,
     visit::Visit,
     Error, GenericParam, Generics, Ident, ImplItem, Item, ItemFn, ItemImpl, ItemMod, ItemTrait,
-    Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
+    Result, Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
 };
 
 mod generic_visitor;
@@ -144,8 +143,8 @@ fn supertrait_internal(
     for trait_item_type in &defaults {
         visitor.visit_trait_item_type(&trait_item_type)
     }
-    println!("subjects: {:?}", visitor.subjects);
-    println!("usages: {:?}", visitor.usages);
+    // println!("subjects: {:?}", visitor.subjects);
+    // println!("usages: {:?}", visitor.usages);
 
     let default_generics = filter_generics(&modified_trait.generics, &visitor.usages);
 
@@ -224,7 +223,7 @@ fn supertrait_internal(
             }
         }
     };
-    output.pretty_print();
+    // output.pretty_print();
     Ok(output)
 }
 
@@ -233,7 +232,7 @@ fn supertrait_internal(
 #[allow(non_snake_case)]
 #[proc_macro_attribute]
 pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
-    match impl_supertrait_internal(__custom_tokens, attr, tokens) {
+    match impl_supertrait_internal(attr, tokens) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.into_compile_error().into(),
     }
@@ -241,6 +240,7 @@ pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream 
 
 #[proc_macro_attribute]
 pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+    parse_macro_input!(attr as Nothing);
     let item_impl = parse_macro_input!(tokens as ItemImpl);
     let trait_being_impled = match item_impl.trait_.clone() {
         Some((_, path, _)) => path,
@@ -260,6 +260,7 @@ struct ImportedTokens {
     const_fns: Vec<TraitItemFn>,
     trait_impl_generics: Generics,
     trait_use_generics: Generics,
+    #[allow(unused)]
     default_impl_generics: Generics,
     default_use_generics: Generics,
     default_items: Vec<TraitItem>,
@@ -405,22 +406,6 @@ impl TryFrom<ItemMod> for ImportedTokens {
     }
 }
 
-/*
-// expanded from `#[impl_supertrait]`:
-impl<I: Copy> MyTrait::DefaultTypes<I> for SomeStruct {
-    type Something = <MyTrait::Defaults as MyTrait::DefaultTypes<I>>::Something;
-    type SomethingOverriden = bool;
-}
-
-// expanded from `#[impl_supertrait]`:
-impl<T: Copy, I: Copy> MyTrait::Trait<T, I> for SomeStruct {
-    fn some_method(something: T) -> T {
-        something
-    }
-}
-
-*/
-
 trait GetIdent {
     fn get_ident(&self) -> Option<Ident>;
 }
@@ -450,7 +435,6 @@ impl GetIdent for ImplItem {
 }
 
 fn impl_supertrait_internal(
-    custom_tokens: impl Into<TokenStream2>,
     foreign_tokens: impl Into<TokenStream2>,
     item_tokens: impl Into<TokenStream2>,
 ) -> Result<TokenStream2> {
@@ -468,7 +452,7 @@ fn impl_supertrait_internal(
         const_fns,
         trait_impl_generics,
         trait_use_generics,
-        default_impl_generics,
+        default_impl_generics: _,
         default_use_generics,
         default_items,
     } = ImportedTokens::try_from(parse2::<ItemMod>(foreign_tokens.into())?)?;
@@ -538,7 +522,7 @@ fn impl_supertrait_internal(
 
         use #trait_mod::Trait;
     };
-    println!("impl:");
-    output.pretty_print();
+    // println!("impl:");
+    // output.pretty_print();
     Ok(output)
 }
