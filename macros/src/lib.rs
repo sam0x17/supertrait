@@ -1,8 +1,8 @@
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
-// use proc_utils::PrettyPrint;
-use quote::{quote, ToTokens};
+use proc_macro2::{TokenStream as TokenStream2, TokenTree};
+//use proc_utils::PrettyPrint;
+use quote::{format_ident, quote, ToTokens};
 use std::collections::{HashMap, HashSet};
 use syn::{
     parse::{Nothing, Parse, ParseStream},
@@ -434,6 +434,43 @@ impl GetIdent for ImplItem {
     }
 }
 
+trait FlattenGroups {
+    fn flatten_groups(&self) -> TokenStream2;
+}
+
+impl FlattenGroups for TokenStream2 {
+    fn flatten_groups(&self) -> TokenStream2 {
+        let mut iter = self.clone().into_iter();
+        let mut final_tokens = TokenStream2::new();
+        while let Some(token) = iter.next() {
+            if let TokenTree::Group(group) = &token {
+                let flattened = group.stream().flatten_groups();
+                final_tokens.extend(quote!(<#flattened>));
+                continue;
+            }
+            final_tokens.extend([token]);
+        }
+        final_tokens
+    }
+}
+
+trait ForceGetIdent: ToTokens {
+    fn force_get_ident(&self) -> Ident {
+        let mut iter = self.to_token_stream().flatten_groups().into_iter();
+        let mut final_tokens = TokenStream2::new();
+        while let Some(token) = iter.next() {
+            let mut tmp = final_tokens.clone();
+            tmp.extend([token.clone()]);
+            if parse2::<Ident>(tmp).is_ok() {
+                final_tokens.extend([token]);
+            }
+        }
+        parse_quote!(#final_tokens)
+    }
+}
+
+impl<T: ToTokens> ForceGetIdent for T {}
+
 fn impl_supertrait_internal(
     foreign_tokens: impl Into<TokenStream2>,
     item_tokens: impl Into<TokenStream2>,
@@ -512,6 +549,8 @@ fn impl_supertrait_internal(
         }
     }
 
+    let trait_import_name: Ident = format_ident!("{}Trait", item_impl.force_get_ident());
+
     let output = quote! {
 
         #item_impl
@@ -520,7 +559,8 @@ fn impl_supertrait_internal(
             #(#impl_const_fns)*
         }
 
-        use #trait_mod::Trait;
+        #[allow(unused)]
+        use #trait_mod::Trait as #trait_import_name;
     };
     // println!("impl:");
     // output.pretty_print();

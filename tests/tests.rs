@@ -44,3 +44,11 @@ fn test_const_fn_trait_items() {
     const _SOME_STRUCT: SomeStruct = SomeStruct {};
     const _TEST_CONST_SELF_FN: usize = _SOME_STRUCT.something_else();
 }
+
+#[supertrait]
+pub trait AnotherTrait {}
+
+struct AnotherStruct;
+
+#[impl_supertrait]
+impl AnotherTrait for AnotherStruct {}
