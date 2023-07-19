@@ -9,8 +9,8 @@ use syn::{
     parse2, parse_macro_input, parse_quote,
     spanned::Spanned,
     visit::Visit,
-    Error, GenericParam, Generics, Ident, ImplItem, Item, ItemFn, ItemImpl, ItemMod, ItemTrait,
-    Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
+    Error, GenericParam, Generics, Ident, ImplItem, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod,
+    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, WherePredicate,
 };
 
 mod generic_visitor;
@@ -143,8 +143,6 @@ fn supertrait_internal(
     for trait_item_type in &defaults {
         visitor.visit_trait_item_type(&trait_item_type)
     }
-    // println!("subjects: {:?}", visitor.subjects);
-    // println!("usages: {:?}", visitor.usages);
 
     let default_generics = filter_generics(&modified_trait.generics, &visitor.usages);
 
@@ -152,9 +150,6 @@ fn supertrait_internal(
     let default_use_generics = default_generics.use_generics;
 
     modified_trait.ident = parse_quote!(Trait);
-    // modified_trait
-    //     .supertraits
-    //     .push(parse_quote!(DefaultTypes #default_use_generics));
 
     let trait_use_generic_params = modified_trait.generics.params.iter().map(|g| match g {
         GenericParam::Lifetime(lifetime) => lifetime.lifetime.to_token_stream(),
@@ -512,6 +507,8 @@ fn impl_supertrait_internal(
     let trait_mod = trait_path.clone().strip_trailing_generics();
     *trait_path = parse_quote!(#trait_mod::Trait #trait_use_generics);
 
+    item_impl.generics = trait_impl_generics.clone();
+
     let mut final_items: HashMap<Ident, ImplItem> = HashMap::new();
     for item in default_items {
         let item_ident = item.get_ident().unwrap();
@@ -541,14 +538,14 @@ fn impl_supertrait_internal(
     final_items.extend(final_verbatim_items);
     item_impl.items = final_items;
 
-    let mut impl_const_fn_sigs: HashSet<String> = HashSet::new();
+    let mut impl_const_fn_idents: HashSet<Ident> = HashSet::new();
     let mut impl_const_fns: Vec<ImplItem>;
     (impl_const_fns, item_impl.items) = item_impl.items.into_iter().partition(|item| {
         let ImplItem::Fn(impl_item_fn) = item else { return false };
         if impl_item_fn.sig.constness.is_none() {
             return false;
         };
-        impl_const_fn_sigs.insert(impl_item_fn.sig.to_token_stream().to_string());
+        impl_const_fn_idents.insert(impl_item_fn.sig.ident.clone());
         true
     });
     for const_fn in impl_const_fns.iter_mut() {
@@ -556,7 +553,7 @@ fn impl_supertrait_internal(
         const_fn.vis = parse_quote!(pub);
     }
     for item in &const_fns {
-        if !impl_const_fn_sigs.contains(&item.sig.to_token_stream().to_string()) {
+        if !impl_const_fn_idents.contains(&item.sig.ident) {
             return Err(Error::new(
                 item_impl.span(),
                 format!("missing impl for `{}`.", item.sig.ident),
@@ -570,11 +567,25 @@ fn impl_supertrait_internal(
         item_impl.trait_.clone().unwrap().1.force_get_ident()
     );
 
+    let impl_const_fns = impl_const_fns.iter().map(|const_fn| {
+        let mut const_fn_visitor = FindGenericParam::new(&trait_impl_generics);
+        const_fn_visitor.visit_impl_item(const_fn);
+        let const_fn_generics =
+            filter_generics(&trait_impl_generics, &const_fn_visitor.usages).impl_generics;
+        let mut const_fn: ImplItemFn = parse_quote!(#const_fn);
+        const_fn.sig.generics = const_fn_generics;
+        const_fn
+    });
+
+    let mut impl_visitor = FindGenericParam::new(&item_impl.generics);
+    impl_visitor.visit_item_impl(&item_impl);
+    item_impl.generics = filter_generics(&item_impl.generics, &impl_visitor.usages).impl_generics;
+
     let output = quote! {
         #item_impl
 
         // const fn implementations
-        impl #impl_target { // TODO: #const_fn_generics
+        impl #impl_target {
             #(#impl_const_fns)*
         }
 
@@ -582,7 +593,6 @@ fn impl_supertrait_internal(
         use #trait_mod::Trait as #trait_import_name;
     };
     println!("impl:");
-    println!("{}", output.to_token_stream().to_string());
     output.pretty_print();
     Ok(output)
 }
