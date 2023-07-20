@@ -578,6 +578,14 @@ fn impl_supertrait_internal(
         item_impl.trait_.clone().unwrap().1.force_get_ident()
     );
 
+    let converted_const_fns = impl_const_fns.iter().map(|const_fn| {
+        let mut const_fn: ImplItemFn = parse_quote!(#const_fn);
+        const_fn.sig.constness = None;
+        const_fn.vis = Visibility::Inherited;
+        let item: ImplItem = parse_quote!(#const_fn);
+        item
+    });
+
     let impl_const_fns = impl_const_fns.iter().map(|const_fn| {
         let mut const_fn_visitor = FindGenericParam::new(&trait_impl_generics);
         const_fn_visitor.visit_impl_item(const_fn);
@@ -588,13 +596,6 @@ fn impl_supertrait_internal(
         const_fn
     });
 
-    let converted_const_fns = impl_const_fns.clone().map(|const_fn| {
-        let mut const_fn = const_fn.clone();
-        const_fn.sig.constness = None;
-        const_fn.vis = Visibility::Inherited;
-        let item: ImplItem = parse_quote!(#const_fn);
-        item
-    });
     item_impl.items.extend(converted_const_fns);
     let mut impl_visitor = FindGenericParam::new(&item_impl.generics);
     impl_visitor.visit_item_impl(&item_impl);

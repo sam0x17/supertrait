@@ -1,3 +1,5 @@
+use std::any::TypeId;
+
 use supertrait::*;
 
 #[supertrait]
@@ -53,8 +55,15 @@ pub trait ConstInto<T> {
 struct AnotherStruct;
 
 #[impl_supertrait]
-impl ConstInto<&'static str> for AnotherStruct {
-    const fn into_const(&self) -> &'static str {
-        "hey"
+impl ConstInto<u8> for AnotherStruct {
+    const fn into_const(&self) -> u8 {
+        33
+    }
+}
+
+#[impl_supertrait]
+impl ConstInto<bool> for AnotherStruct {
+    const fn into_const(&self) -> bool {
+        false
     }
 }
