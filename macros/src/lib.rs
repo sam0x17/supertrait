@@ -496,6 +496,28 @@ impl StripTrailingGenerics for Path {
 
 impl<T: ToTokens> ForceGetIdent for T {}
 
+fn merge_generics(a: &Generics, b: &Generics) -> Generics {
+    let mut params = b.params.clone();
+    params.extend(a.params.clone());
+    let where_clause = match &a.where_clause {
+        Some(a_where) => match &b.where_clause {
+            Some(b_where) => {
+                let mut combined_where = b_where.clone();
+                combined_where.predicates.extend(a_where.predicates.clone());
+                Some(combined_where)
+            }
+            None => a.where_clause.clone(),
+        },
+        None => b.where_clause.clone(),
+    };
+    Generics {
+        lt_token: b.lt_token.clone(),
+        params,
+        gt_token: b.gt_token.clone(),
+        where_clause: where_clause,
+    }
+}
+
 fn impl_supertrait_internal(
     foreign_tokens: impl Into<TokenStream2>,
     item_tokens: impl Into<TokenStream2>,
@@ -599,7 +621,7 @@ fn impl_supertrait_internal(
         let const_fn_generics =
             filter_generics(&trait_impl_generics, &const_fn_visitor.usages).impl_generics;
         let mut const_fn: ImplItemFn = parse_quote!(#const_fn);
-        const_fn.sig.generics = const_fn_generics;
+        const_fn.sig.generics = merge_generics(&const_fn_generics, &const_fn.sig.generics);
         const_fn
     });
 
