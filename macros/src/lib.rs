@@ -3,7 +3,10 @@ use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 // use proc_utils::PrettyPrint;
 use quote::{format_ident, quote, ToTokens};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::atomic::AtomicU64,
+};
 use syn::{
     parse::{Nothing, Parse, ParseStream},
     parse2, parse_macro_input, parse_quote,
@@ -16,6 +19,8 @@ use syn::{
 
 mod generic_visitor;
 use generic_visitor::*;
+
+static IMPL_COUNT: AtomicU64 = AtomicU64::new(0);
 
 struct SuperTraitDef {
     pub orig_trait: ItemTrait,
@@ -572,10 +577,12 @@ fn impl_supertrait_internal(
         }
     }
 
+    let impl_index = IMPL_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let trait_import_name: Ident = format_ident!(
-        "{}{}TraitImpl",
+        "{}{}TraitImpl_{}",
         impl_target.clone().force_get_ident(),
-        item_impl.trait_.clone().unwrap().1.force_get_ident()
+        item_impl.trait_.clone().unwrap().1.force_get_ident(),
+        impl_index,
     );
 
     let converted_const_fns = impl_const_fns.iter().map(|const_fn| {

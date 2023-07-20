@@ -1,5 +1,3 @@
-use std::any::TypeId;
-
 use supertrait::*;
 
 #[supertrait]
@@ -61,9 +59,9 @@ impl ConstInto<u8> for AnotherStruct {
     }
 }
 
-#[impl_supertrait]
-impl ConstInto<bool> for AnotherStruct {
-    const fn into_const(&self) -> bool {
-        false
-    }
-}
+// #[impl_supertrait]
+// impl ConstInto<bool> for AnotherStruct {
+//     const fn into_const(&self) -> bool {
+//         false
+//     }
+// }
