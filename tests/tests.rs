@@ -1,3 +1,5 @@
+#![no_std]
+
 use supertrait::*;
 
 #[supertrait]
@@ -45,92 +47,37 @@ fn test_const_fn_trait_items() {
     const _TEST_CONST_SELF_FN: usize = _SOME_STRUCT.something_else();
 }
 
-#[supertrait]
-pub trait IntoConstU8 {
-    const fn into_const_u8(&self) -> u8;
+pub trait CustomTypeId {
+    const TYPE_ID: usize;
 }
 
-#[supertrait]
-pub trait IntoConstBool {
-    const fn into_const_bool(&self) -> bool;
-}
-
-pub struct MyStruct;
-
-#[impl_supertrait]
-impl IntoConstU8 for MyStruct {
-    const fn into_const_u8(&self) -> u8 {
-        37
-    }
-}
-
-#[impl_supertrait]
-impl IntoConstBool for MyStruct {
-    const fn into_const_bool(&self) -> bool {
-        false
-    }
-}
-
-pub trait IntoConstUnion {}
-
-pub union SupportedTypes {
+pub union MyStructInto {
     bool: bool,
     u8: u8,
 }
 
-impl IntoConstUnion for SupportedTypes {}
-
-#[supertrait]
-pub trait IntoConst<U: IntoConstUnion> {
-    const fn into_const<T>(&self) -> U;
+impl CustomTypeId for bool {
+    const TYPE_ID: usize = 0;
 }
 
-// #[impl_supertrait]
-// impl IntoConst<SupportedTypes> for MyStruct {
-//     const fn into_const<T>(&self) -> SupportedTypes {
-//         core::any::type_name::<T>();
-//     }
-// }
+impl CustomTypeId for u8 {
+    const TYPE_ID: usize = 1;
+}
 
-// #[supertrait]
-// pub trait IntoConst {
-//     const
-// }
+pub struct MyStruct;
 
-// pub trait IntoProvider<T> {
-//     type Inherent;
-// }
+#[supertrait]
+pub trait IntoConst<U> {
+    const fn into_const<T: CustomTypeId>(&self) -> U;
+}
 
-// #[supertrait]
-// pub trait ConstInto<T>: IntoProvider<T> {
-//     const fn into_const(&self) -> T;
-// }
-
-// pub struct AnotherStruct;
-
-// pub struct SomeRandomThrowaway;
-
-// impl SomeRandomThrowaway {
-//     pub const fn into_const(&self) -> u8 {
-//         34
-//     }
-// }
-
-// impl IntoProvider<u8> for AnotherStruct {
-//     type Inherent = SomeRandomThrowaway;
-// }
-
-// #[impl_supertrait]
-// impl ConstInto<u8> for AnotherStruct {
-//     const fn into_const(&self) -> u8 {
-//         let x: <Self as IntoProvider<u8>>::Inherent = SomeRandomThrowaway {};
-//         x.into_const()
-//     }
-// }
-
-// #[impl_supertrait]
-// impl ConstInto<bool> for AnotherStruct {
-//     const fn into_const(&self) -> bool {
-//         false
-//     }
-// }
+#[impl_supertrait]
+impl IntoConst<MyStructInto> for MyStruct {
+    const fn into_const<T: CustomTypeId>(&self) -> MyStructInto {
+        match T::TYPE_ID {
+            bool::TYPE_ID => MyStructInto { bool: true },
+            u8::TYPE_ID => MyStructInto { u8: 33 },
+            _ => panic!("invalid"),
+        }
+    }
+}
