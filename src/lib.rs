@@ -1,3 +1,5 @@
+#![no_std]
+
 pub use supertrait_macros::*;
 
 #[doc(hidden)]
