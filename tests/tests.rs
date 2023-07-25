@@ -47,28 +47,9 @@ fn test_const_fn_trait_items() {
     const _TEST_CONST_SELF_FN: usize = _SOME_STRUCT.something_else();
 }
 
-pub trait CustomTypeId {
-    const TYPE_ID: usize;
-}
-
 pub union MyStructInto {
     bool: bool,
     u8: u8,
-}
-
-impl CustomTypeId for bool {
-    const TYPE_ID: usize = 0;
-}
-
-impl CustomTypeId for u8 {
-    const TYPE_ID: usize = 1;
-}
-
-pub struct MyStruct;
-
-#[supertrait]
-pub trait IntoConst<U> {
-    const fn into_const<T: CustomTypeId>(&self) -> U;
 }
 
 #[impl_supertrait]

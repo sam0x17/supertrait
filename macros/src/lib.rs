@@ -4,12 +4,13 @@ use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 // use proc_utils::PrettyPrint;
 use quote::{format_ident, quote, ToTokens};
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     sync::atomic::AtomicU64,
 };
 use syn::{
     parse::{Nothing, Parse, ParseStream},
-    parse2, parse_macro_input, parse_quote,
+    parse2, parse_macro_input, parse_quote, parse_str,
     spanned::Spanned,
     visit::Visit,
     Error, GenericParam, Generics, Ident, ImplItem, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod,
@@ -21,6 +22,20 @@ mod generic_visitor;
 use generic_visitor::*;
 
 static IMPL_COUNT: AtomicU64 = AtomicU64::new(0);
+thread_local! {
+    static SUPERTRAIT_PATH: RefCell<String> = RefCell::new(String::from("::supertrait"));
+}
+
+fn get_supertrait_path() -> Path {
+    SUPERTRAIT_PATH.with(|p| parse_str(p.borrow().clone().as_str()).unwrap())
+}
+
+#[proc_macro]
+pub fn set_supertrait_path(tokens: TokenStream) -> TokenStream {
+    let path = parse_macro_input!(tokens as Path);
+    SUPERTRAIT_PATH.with(|p| p.replace(path.to_token_stream().to_string()));
+    quote!().into()
+}
 
 struct SuperTraitDef {
     pub orig_trait: ItemTrait,
@@ -132,6 +147,7 @@ fn supertrait_internal(
 ) -> Result<TokenStream2> {
     parse2::<Nothing>(attr.into())?;
     let def = parse2::<SuperTraitDef>(tokens.into())?;
+    let export_tokens_ident = format_ident!("{}_exported_tokens", def.orig_trait.ident);
     let mut modified_trait = def.orig_trait;
     modified_trait.items = def.other_items;
     let ident = modified_trait.ident.clone();
@@ -193,6 +209,8 @@ fn supertrait_internal(
     });
     modified_trait.items.extend(converted_const_fns);
 
+    let supertrait_path = get_supertrait_path();
+
     let output = quote! {
         #(#attrs)*
         #[allow(non_snake_case)]
@@ -215,7 +233,7 @@ fn supertrait_internal(
 
             #modified_trait
 
-            #[::supertrait::__private::macro_magic::export_tokens_no_emit]
+            #[#supertrait_path::__private::macro_magic::export_tokens_no_emit(#export_tokens_ident)]
             mod exported_tokens {
                 trait ConstFns {
                     #(#const_fns)*
@@ -258,8 +276,13 @@ pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
             "Supertrait impls must have a trait being implemented. Inherent impls are not supported."
         ).into_compile_error().into(),
     }.strip_trailing_generics();
+    let supertrait_path = get_supertrait_path();
+    let export_tokens_ident = format_ident!(
+        "{}_exported_tokens",
+        trait_being_impled.segments.last().unwrap().ident
+    );
     let output = quote! {
-        #[::supertrait::__impl_supertrait(#trait_being_impled::exported_tokens)]
+        #[#supertrait_path::__impl_supertrait(#trait_being_impled::#export_tokens_ident)]
         #item_impl
     };
     // output.pretty_print();
