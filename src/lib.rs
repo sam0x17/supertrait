@@ -35,8 +35,8 @@ impl_custom_type_id!(str, 15226379227753928641);
 impl_custom_type_id!(&str, 10629156722039909512);
 
 #[supertrait]
-pub trait IntoConst {
-    const fn into_const<T: CustomTypeId>(&self) -> &T;
+pub trait ConstInto {
+    const fn const_into<T: CustomTypeId>(&self) -> &T;
 }
 
 set_supertrait_path!(::supertrait);

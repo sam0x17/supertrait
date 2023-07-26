@@ -54,8 +54,8 @@ pub struct MyStruct {
 }
 
 #[impl_supertrait]
-impl IntoConst for MyStruct {
-    const fn into_const<T: CustomTypeId>(&self) -> &T {
+impl ConstInto for MyStruct {
+    const fn const_into<T: CustomTypeId>(&self) -> &T {
         match T::TYPE_ID {
             bool::TYPE_ID => unsafe { &*((&self.bool as *const bool) as *const T) },
             i32::TYPE_ID => unsafe { &*((&self.i32 as *const i32) as *const T) },
@@ -72,7 +72,7 @@ const fn test_const_into() {
         i32: -67,
         char: 'h',
     };
-    assert!(*s.into_const::<bool>() == true);
-    assert!(*s.into_const::<i32>() == -67);
-    assert!(*s.into_const::<char>() == 'h');
+    assert!(*s.const_into::<bool>() == true);
+    assert!(*s.const_into::<i32>() == -67);
+    assert!(*s.const_into::<char>() == 'h');
 }
