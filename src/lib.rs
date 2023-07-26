@@ -16,8 +16,6 @@ impl CustomTypeId for u8 {
     const TYPE_ID: usize = 1;
 }
 
-pub struct MyStruct;
-
 #[supertrait]
 pub trait IntoConst<U> {
     const fn into_const<T: CustomTypeId>(&self) -> U;

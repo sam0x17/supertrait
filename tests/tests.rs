@@ -52,6 +52,8 @@ pub union MyStructInto {
     u8: u8,
 }
 
+pub struct MyStruct;
+
 #[impl_supertrait]
 impl IntoConst<MyStructInto> for MyStruct {
     const fn into_const<T: CustomTypeId>(&self) -> MyStructInto {
