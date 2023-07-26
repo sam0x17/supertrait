@@ -656,13 +656,21 @@ fn impl_supertrait_internal(
     impl_visitor.visit_item_impl(&item_impl);
     item_impl.generics = filter_generics(&item_impl.generics, &impl_visitor.usages).impl_generics;
 
+    let inherent_impl = if impl_const_fns.len() > 0 {
+        Some(quote! {
+            // const fn implementations
+            impl #impl_target {
+                #(#impl_const_fns)*
+            }
+        })
+    } else {
+        None
+    };
+
     let output = quote! {
         #item_impl
 
-        // const fn implementations
-        impl #impl_target {
-            #(#impl_const_fns)*
-        }
+        #inherent_impl
 
         #[allow(unused)]
         use #trait_mod::Trait as #trait_import_name;

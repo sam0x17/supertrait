@@ -56,7 +56,8 @@ pub struct MyStruct;
 
 #[impl_supertrait]
 impl IntoConst<MyStructInto> for MyStruct {
-    const fn into_const<T: CustomTypeId>(&self) -> MyStructInto {
+    const fn into_const<T: CustomTypeId::Trait>(&self) -> MyStructInto {
+        use supertrait::CustomTypeId::Trait;
         match T::TYPE_ID {
             bool::TYPE_ID => MyStructInto { bool: true },
             u8::TYPE_ID => MyStructInto { u8: 33 },
