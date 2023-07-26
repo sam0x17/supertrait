@@ -47,21 +47,32 @@ fn test_const_fn_trait_items() {
     const _TEST_CONST_SELF_FN: usize = _SOME_STRUCT.something_else();
 }
 
-pub union MyStructInto {
+pub struct MyStruct {
     bool: bool,
-    u8: u8,
+    i32: i32,
+    char: char,
 }
 
-pub struct MyStruct;
-
 #[impl_supertrait]
-impl IntoConst<MyStructInto> for MyStruct {
-    const fn into_const<T: CustomTypeId::Trait>(&self) -> MyStructInto {
-        use supertrait::CustomTypeId::Trait;
+impl IntoConst for MyStruct {
+    const fn into_const<T: CustomTypeId>(&self) -> &T {
         match T::TYPE_ID {
-            bool::TYPE_ID => MyStructInto { bool: true },
-            u8::TYPE_ID => MyStructInto { u8: 33 },
-            _ => panic!("invalid"),
+            bool::TYPE_ID => unsafe { &*((&self.bool as *const bool) as *const T) },
+            i32::TYPE_ID => unsafe { &*((&self.i32 as *const i32) as *const T) },
+            char::TYPE_ID => unsafe { &*((&self.char as *const char) as *const T) },
+            _ => panic!("unsupported type"),
         }
     }
+}
+
+#[test]
+const fn test_const_into() {
+    let s = MyStruct {
+        bool: true,
+        i32: -67,
+        char: 'h',
+    };
+    assert!(*s.into_const::<bool>() == true);
+    assert!(*s.into_const::<i32>() == -67);
+    assert!(*s.into_const::<char>() == 'h');
 }
