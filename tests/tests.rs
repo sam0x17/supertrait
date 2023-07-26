@@ -1,5 +1,8 @@
 #![no_std]
 
+extern crate alloc;
+use alloc::string::String;
+
 use supertrait::*;
 
 #[supertrait]
@@ -97,3 +100,33 @@ const fn test_const_into() {
     assert!(*s.const_into::<i32>() == -67);
     assert!(*s.const_into::<char>() == 'h');
 }
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+struct WrappedU8(u8);
+
+impl From<u8> for WrappedU8 {
+    fn from(value: u8) -> Self {
+        WrappedU8(value)
+    }
+}
+
+impl From<WrappedU8> for u8 {
+    fn from(value: WrappedU8) -> Self {
+        value.0
+    }
+}
+
+#[supertrait]
+pub trait RIntoWithDATs<'i, 'o, O: PartialEq + 'o>
+where
+    Self: Into<O>,
+    O: Into<Self>,
+{
+    type InputRef = &'i Self;
+    type OutputRef = &'o O;
+    type InputOption = Option<Self>;
+    type OutputOption = Option<O>;
+}
+
+#[impl_supertrait]
+impl<'i, 'o> RIntoWithDATs<'i, 'o, WrappedU8> for u8 {}
