@@ -65,6 +65,28 @@ impl ConstInto for MyStruct {
     }
 }
 
+// #[impl_supertrait]
+// impl ConstFrom<i32> for MyStruct {
+//     const fn const_from(val: i32) -> Self {
+//         MyStruct {
+//             bool: true,
+//             i32: val,
+//             char: 'y',
+//         }
+//     }
+// }
+
+// #[impl_supertrait]
+// impl ConstFrom<bool> for MyStruct {
+//     const fn const_from(val: bool) -> Self {
+//         MyStruct {
+//             bool: val,
+//             i32: 15,
+//             char: 'y',
+//         }
+//     }
+// }
+
 #[test]
 const fn test_const_into() {
     let s = MyStruct {

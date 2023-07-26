@@ -34,6 +34,14 @@ impl_custom_type_id!(i128, 10725666691061222156);
 impl_custom_type_id!(str, 15226379227753928641);
 impl_custom_type_id!(&str, 10629156722039909512);
 
+// #[supertrait]
+// pub trait ConstFrom<T: CustomTypeId>
+// where
+//     Self: Sized,
+// {
+//     const fn const_from(val: T) -> Self;
+// }
+
 #[supertrait]
 pub trait ConstInto {
     const fn const_into<T: CustomTypeId>(&self) -> &T;
