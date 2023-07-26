@@ -41,10 +41,9 @@ fn test_default_associated_types() {
 }
 
 #[test]
-fn test_const_fn_trait_items() {
-    const _TEST_CONST_FN: bool = SomeStruct::yet_another_thing();
-    const _SOME_STRUCT: SomeStruct = SomeStruct {};
-    const _TEST_CONST_SELF_FN: usize = _SOME_STRUCT.something_else();
+const fn test_const_fn_trait_items() {
+    SomeStruct::yet_another_thing();
+    SomeStruct {}.something_else();
 }
 
 pub struct MyStruct {
