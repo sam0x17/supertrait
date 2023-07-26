@@ -255,7 +255,10 @@ fn supertrait_internal(
 }
 
 #[doc(hidden)]
-#[import_tokens_attr(::supertrait::__private::macro_magic)]
+#[import_tokens_attr(format!(
+    "{}::__private::macro_magic",
+    get_supertrait_path().to_token_stream().to_string()
+))]
 #[allow(non_snake_case)]
 #[proc_macro_attribute]
 pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
