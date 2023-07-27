@@ -134,3 +134,23 @@ const fn test_const_clone() {
     let _b: WrappedU8 = a.const_clone();
     assert!(_b.0 == 3);
 }
+
+#[impl_supertrait]
+impl ConstPartialEq for WrappedU8 {
+    const fn const_eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+
+    const fn const_ne(&self, other: &Self) -> bool {
+        !self.const_eq(other)
+    }
+}
+
+#[test]
+const fn test_const_partial_eq() {
+    let a = WrappedU8(1);
+    let b = WrappedU8(2);
+    let c = WrappedU8(1);
+    assert!(a.const_ne(&b));
+    assert!(a.const_eq(&c));
+}

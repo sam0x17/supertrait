@@ -54,6 +54,15 @@ pub trait ConstClone {
         Self: Clone;
 }
 
+#[supertrait]
+pub trait ConstPartialEq<Rhs = Self> {
+    const fn const_eq(&self, other: &Rhs) -> bool;
+
+    const fn const_ne(&self, other: &Rhs) -> bool {
+        !self.const_eq(other)
+    }
+}
+
 set_supertrait_path!(::supertrait);
 
 #[doc(hidden)]
