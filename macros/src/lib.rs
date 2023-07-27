@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
@@ -15,8 +17,8 @@ use syn::{
     visit::Visit,
     visit_mut::VisitMut,
     Error, GenericParam, Generics, Ident, ImplItem, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod,
-    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, TypePath,
-    Visibility, WherePredicate,
+    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, Visibility,
+    WherePredicate,
 };
 
 mod generic_visitor;
@@ -274,7 +276,6 @@ fn supertrait_internal(
     "{}::__private::macro_magic",
     get_supertrait_path().to_token_stream().to_string()
 ))]
-#[allow(non_snake_case)]
 #[proc_macro_attribute]
 pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
     match impl_supertrait_internal(attr, tokens) {
