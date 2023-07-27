@@ -1,7 +1,7 @@
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
-// use proc_utils::PrettyPrint;
+use proc_utils::PrettyPrint;
 use quote::{format_ident, quote, ToTokens};
 use std::{
     cell::RefCell,
@@ -15,8 +15,8 @@ use syn::{
     visit::Visit,
     visit_mut::VisitMut,
     Error, GenericParam, Generics, Ident, ImplItem, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod,
-    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, Visibility,
-    WherePredicate,
+    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, TypePath,
+    Visibility, WherePredicate,
 };
 
 mod generic_visitor;
@@ -153,7 +153,7 @@ fn supertrait_internal(
     modified_trait.items = def.other_items;
     let ident = modified_trait.ident.clone();
     let attrs = modified_trait.attrs.clone();
-    let defaults = def.types_with_defaults;
+    let mut defaults = def.types_with_defaults;
     let unfilled_defaults = defaults
         .iter()
         .cloned()
@@ -163,11 +163,23 @@ fn supertrait_internal(
         })
         .collect::<Vec<_>>();
     let mut visitor = FindGenericParam::new(&modified_trait.generics);
-    for trait_item_type in &defaults {
-        visitor.visit_trait_item_type(&trait_item_type)
+    let mut replace_self = ReplaceSelfType {
+        replace_type: parse_quote!(__Self),
+    };
+    for trait_item_type in &mut defaults {
+        visitor.visit_trait_item_type(trait_item_type);
+        replace_self.visit_trait_item_type_mut(trait_item_type);
     }
 
-    let default_generics = filter_generics(&modified_trait.generics, &visitor.usages);
+    let mut default_generics = filter_generics(&modified_trait.generics, &visitor.usages);
+    default_generics
+        .impl_generics
+        .params
+        .push(parse_quote!(__Self));
+    default_generics
+        .use_generics
+        .params
+        .push(parse_quote!(__Self));
 
     let default_impl_generics = default_generics.impl_generics;
     let default_use_generics = default_generics.use_generics;
@@ -225,11 +237,13 @@ fn supertrait_internal(
             /// _without_ their defaults. This is automatically implemented on [`Defaults`],
             /// which contains the actual default type values.
             pub trait DefaultTypes #default_impl_generics {
+                type __Self;
                 #(#unfilled_defaults)*
             }
 
             impl #default_impl_generics DefaultTypes #default_use_generics for Defaults {
                 #(#defaults)*
+                type __Self = ();
             }
 
             #modified_trait
@@ -251,7 +265,7 @@ fn supertrait_internal(
             }
         }
     };
-    // output.pretty_print();
+    output.pretty_print();
     Ok(output)
 }
 
@@ -560,6 +574,19 @@ impl VisitMut for ReplaceType {
     }
 }
 
+struct ReplaceSelfType {
+    replace_type: Ident,
+}
+
+impl VisitMut for ReplaceSelfType {
+    fn visit_ident_mut(&mut self, ident: &mut Ident) {
+        if ident != "Self" {
+            return;
+        }
+        *ident = self.replace_type.clone();
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 enum RemappedGeneric {
     Lifetime(Ident),
@@ -630,6 +657,12 @@ fn impl_supertrait_internal(
         remapped_type_params.insert(remapped, target);
     }
 
+    // replace Self type with type we are implementing on
+    remapped_type_params.insert(
+        RemappedGeneric::Type(parse_quote!(__Self)),
+        parse_quote!(#impl_target),
+    );
+
     let trait_mod = trait_path.clone().strip_trailing_generics();
     trait_path
         .segments
@@ -657,6 +690,9 @@ fn impl_supertrait_internal(
                 replace_type: replace.clone(),
             };
             visitor.visit_impl_item_mut(&mut item);
+        }
+        if item_ident == "__Self" {
+            item = parse_quote!(#impl_target);
         }
         final_items.insert(item_ident, item);
     }
@@ -746,5 +782,6 @@ fn impl_supertrait_internal(
         #[allow(unused)]
         use #trait_mod::Trait as #trait_import_name;
     };
+    output.pretty_print();
     Ok(output)
 }

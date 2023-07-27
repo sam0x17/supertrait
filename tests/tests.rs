@@ -119,7 +119,7 @@ where
     Self: Into<O>,
     O: Into<Self>,
 {
-    type InputRef = &'i Self;
+    type InputRef = Self;
     type OutputRef = &'o O;
     type InputOption = Option<Self>;
     type OutputOption = Option<O>;
@@ -137,4 +137,5 @@ fn test_generics_in_default_associated_types() {
     let _a: <u8 as RIntoWithDATs::Trait<WrappedU8>>::Unspecified = (1, 2);
     let _b: <u8 as RIntoWithDATs::Trait<WrappedU8>>::OutputRef = &false;
     let _c: <u8 as RIntoWithDATs::Trait<WrappedU8>>::OutputOption = None;
+    let _b: <u8 as RIntoWithDATs::Trait<WrappedU8>>::InputRef = 3u8;
 }
