@@ -150,3 +150,31 @@ const fn test_const_partial_eq() {
     assert!(a.const_ne(&b));
     assert!(a.const_eq(&c));
 }
+
+// intentionally incorrect implementation
+#[impl_supertrait]
+impl ConstPartialEq for MyStruct {
+    const fn const_eq(&self, _other: &Self) -> bool {
+        false
+    }
+
+    const fn const_ne(&self, _other: &Self) -> bool {
+        false
+    }
+}
+
+#[test]
+const fn test_incorrect_supertrait() {
+    let a = MyStruct {
+        bool: true,
+        i32: 3,
+        char: 'a',
+    };
+    let b = MyStruct {
+        bool: true,
+        i32: 3,
+        char: 'a',
+    };
+    assert!(!a.const_eq(&b));
+    assert!(!a.const_ne(&b));
+}
