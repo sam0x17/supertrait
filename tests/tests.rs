@@ -117,3 +117,20 @@ fn test_generics_in_default_associated_types() {
     let _c: <u8 as RIntoWithDATs::Trait<WrappedU8>>::OutputOption = None;
     let _b: <u8 as RIntoWithDATs::Trait<WrappedU8>>::InputRef = 3u8;
 }
+
+#[impl_supertrait]
+impl ConstClone for WrappedU8 {
+    const fn const_clone(&self) -> Self
+    where
+        Self: Clone,
+    {
+        *self
+    }
+}
+
+#[test]
+const fn test_const_clone() {
+    let a = WrappedU8(3);
+    let _b: WrappedU8 = a.const_clone();
+    assert!(_b.0 == 3);
+}

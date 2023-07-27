@@ -47,6 +47,13 @@ pub trait ConstInto {
     const fn const_into<T: CustomTypeId>(&self) -> &T;
 }
 
+#[supertrait]
+pub trait ConstClone {
+    const fn const_clone(&self) -> Self
+    where
+        Self: Clone;
+}
+
 set_supertrait_path!(::supertrait);
 
 #[doc(hidden)]
