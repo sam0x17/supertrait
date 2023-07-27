@@ -3,7 +3,6 @@
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
-use proc_utils::PrettyPrint;
 use quote::{format_ident, quote, ToTokens};
 use std::{
     cell::RefCell,
@@ -20,6 +19,9 @@ use syn::{
     ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, Visibility,
     WherePredicate,
 };
+
+#[cfg(feature = "debug")]
+use proc_utils::PrettyPrint;
 
 mod generic_visitor;
 use generic_visitor::*;
@@ -267,6 +269,7 @@ fn supertrait_internal(
             }
         }
     };
+    #[cfg(feature = "debug")]
     output.pretty_print();
     Ok(output)
 }
@@ -304,6 +307,7 @@ pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
         #[#supertrait_path::__impl_supertrait(#trait_being_impled::#export_tokens_ident)]
         #item_impl
     };
+    // #[cfg(feature = "debug")]
     // output.pretty_print();
     output.into()
 }
@@ -783,6 +787,7 @@ fn impl_supertrait_internal(
         #[allow(unused)]
         use #trait_mod::Trait as #trait_import_name;
     };
+    #[cfg(feature = "debug")]
     output.pretty_print();
     Ok(output)
 }

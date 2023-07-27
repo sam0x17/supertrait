@@ -13,3 +13,7 @@ repository = "https://github.com/sam0x17/supertrait"
 [dependencies]
 supertrait-macros = { path = "macros", version = "0.0.1" }
 macro_magic = "0.4"
+
+[features]
+default = []
+debug = ["supertrait-macros/debug"]
