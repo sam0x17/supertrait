@@ -1,8 +1,5 @@
 #![no_std]
 
-extern crate alloc;
-use alloc::string::String;
-
 use supertrait::*;
 
 #[supertrait]
@@ -126,7 +123,18 @@ where
     type OutputRef = &'o O;
     type InputOption = Option<Self>;
     type OutputOption = Option<O>;
+    type Unspecified;
 }
 
 #[impl_supertrait]
-impl<'i, 'o> RIntoWithDATs<'i, 'o, WrappedU8> for u8 {}
+impl<'i, 'o> RIntoWithDATs<'i, 'o, WrappedU8> for u8 {
+    type Unspecified = (usize, usize);
+    type OutputRef = &'o bool;
+}
+
+#[test]
+fn test_generics_in_default_associated_types() {
+    let _a: <u8 as RIntoWithDATs::Trait<WrappedU8>>::Unspecified = (1, 2);
+    let _b: <u8 as RIntoWithDATs::Trait<WrappedU8>>::OutputRef = &false;
+    let _c: <u8 as RIntoWithDATs::Trait<WrappedU8>>::OutputOption = None;
+}

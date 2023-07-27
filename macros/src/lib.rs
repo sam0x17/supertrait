@@ -13,6 +13,7 @@ use syn::{
     parse2, parse_macro_input, parse_quote, parse_str,
     spanned::Spanned,
     visit::Visit,
+    visit_mut::VisitMut,
     Error, GenericParam, Generics, Ident, ImplItem, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod,
     ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, Visibility,
     WherePredicate,
@@ -544,6 +545,38 @@ fn merge_generics(a: &Generics, b: &Generics) -> Generics {
     }
 }
 
+struct ReplaceType {
+    search_type: RemappedGeneric,
+    replace_type: GenericParam,
+}
+
+impl VisitMut for ReplaceType {
+    fn visit_ident_mut(&mut self, ident: &mut Ident) {
+        let search_ident = self.search_type.ident();
+        if ident != search_ident {
+            return;
+        }
+        *ident = self.replace_type.force_get_ident();
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+enum RemappedGeneric {
+    Lifetime(Ident),
+    Type(Ident),
+    Const(Ident),
+}
+
+impl RemappedGeneric {
+    fn ident(&self) -> &Ident {
+        match self {
+            RemappedGeneric::Lifetime(ident) => ident,
+            RemappedGeneric::Type(ident) => ident,
+            RemappedGeneric::Const(ident) => ident,
+        }
+    }
+}
+
 fn impl_supertrait_internal(
     foreign_tokens: impl Into<TokenStream2>,
     item_tokens: impl Into<TokenStream2>,
@@ -567,6 +600,36 @@ fn impl_supertrait_internal(
         default_items,
     } = ImportedTokens::try_from(parse2::<ItemMod>(foreign_tokens.into())?)?;
 
+    let mut remapped_type_params: HashMap<RemappedGeneric, GenericParam> = HashMap::new();
+    for (i, param) in trait_impl_generics.params.iter().enumerate() {
+        let remapped = match param {
+            GenericParam::Lifetime(lifetime) => {
+                RemappedGeneric::Lifetime(lifetime.lifetime.ident.clone())
+            }
+            GenericParam::Type(typ) => RemappedGeneric::Type(typ.ident.clone()),
+            GenericParam::Const(constant) => RemappedGeneric::Const(constant.ident.clone()),
+        };
+        let last_seg = trait_path.segments.last().unwrap();
+        let args: Vec<TokenStream2> = match last_seg.arguments.clone() {
+            syn::PathArguments::None => continue,
+            syn::PathArguments::AngleBracketed(args) => {
+                args.args.into_iter().map(|a| a.to_token_stream()).collect()
+            }
+            syn::PathArguments::Parenthesized(args) => args
+                .inputs
+                .into_iter()
+                .map(|a| a.to_token_stream())
+                .collect(),
+        };
+
+        if i >= args.len() {
+            continue;
+        }
+        let target = args[i].clone();
+        let target: GenericParam = parse_quote!(#target);
+        remapped_type_params.insert(remapped, target);
+    }
+
     let trait_mod = trait_path.clone().strip_trailing_generics();
     trait_path
         .segments
@@ -586,6 +649,14 @@ fn impl_supertrait_internal(
                 item_type.ty = parse_quote!(<#trait_mod::Defaults as #trait_mod::DefaultTypes #default_use_generics>::#item_ident)
             }
             _ => unimplemented!("this item has no notion of defaults"),
+        }
+        for search in remapped_type_params.keys() {
+            let replace = &remapped_type_params[search];
+            let mut visitor = ReplaceType {
+                search_type: search.clone(),
+                replace_type: replace.clone(),
+            };
+            visitor.visit_impl_item_mut(&mut item);
         }
         final_items.insert(item_ident, item);
     }
