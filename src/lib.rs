@@ -55,10 +55,10 @@ pub trait ConstClone {
 }
 
 #[supertrait]
-pub trait ConstPartialEq<Rhs = Self> {
-    const fn const_eq(&self, other: &Rhs) -> bool;
+pub trait ConstPartialEq {
+    const fn const_eq(&self, other: &Self) -> bool;
 
-    const fn const_ne(&self, other: &Rhs) -> bool {
+    const fn const_ne(&self, other: &Self) -> bool {
         !self.const_eq(other)
     }
 }

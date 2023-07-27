@@ -724,17 +724,22 @@ fn impl_supertrait_internal(
         impl_const_fn_idents.insert(impl_item_fn.sig.ident.clone());
         true
     });
+
+    //
+    for item in &const_fns {
+        if !impl_const_fn_idents.contains(&item.sig.ident) {
+            if item.default.is_none() {
+                return Err(Error::new(
+                    item_impl.span(),
+                    format!("missing impl for `{}`.", item.sig.ident),
+                ));
+            }
+            impl_const_fns.push(parse_quote!(#item));
+        }
+    }
     for const_fn in impl_const_fns.iter_mut() {
         let ImplItem::Fn(const_fn) = const_fn else { unreachable!() };
         const_fn.vis = parse_quote!(pub);
-    }
-    for item in &const_fns {
-        if !impl_const_fn_idents.contains(&item.sig.ident) {
-            return Err(Error::new(
-                item_impl.span(),
-                format!("missing impl for `{}`.", item.sig.ident),
-            ));
-        }
     }
 
     let impl_index = IMPL_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);

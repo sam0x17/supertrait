@@ -147,6 +147,6 @@ const fn test_const_partial_eq() {
     let a = WrappedU8(1);
     let b = WrappedU8(2);
     let c = WrappedU8(1);
-    // assert!(a.const_ne(&b));
-    // assert!(a.const_eq(&c));
+    assert!(a.const_ne(&b));
+    assert!(a.const_eq(&c));
 }
