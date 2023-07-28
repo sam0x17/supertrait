@@ -4,6 +4,7 @@ use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::{format_ident, quote, ToTokens};
+use rand::{distributions::Standard, prelude::Distribution, Rng};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -33,6 +34,14 @@ thread_local! {
 
 fn get_supertrait_path() -> Path {
     SUPERTRAIT_PATH.with(|p| parse_str(p.borrow().clone().as_str()).unwrap())
+}
+
+fn random<T>() -> T
+where
+    Standard: Distribution<T>,
+{
+    let mut rng = rand::thread_rng();
+    rng.gen()
 }
 
 #[proc_macro]
@@ -228,6 +237,12 @@ fn supertrait_internal(
 
     let supertrait_path = get_supertrait_path();
 
+    // seal trait with random ident
+    let random_value: u32 = random();
+    let sealed_ident = format_ident!("SupertraitSealed{random_value}");
+    let sealed_trait: ItemTrait = parse_quote!(pub trait #sealed_ident {});
+    modified_trait.supertraits.push(parse_quote!(#sealed_ident));
+
     let output = quote! {
         #(#attrs)*
         #[allow(non_snake_case)]
@@ -250,6 +265,7 @@ fn supertrait_internal(
                 type __Self = ();
             }
 
+            #sealed_trait
             #modified_trait
 
             #[#supertrait_path::__private::macro_magic::export_tokens_no_emit(#export_tokens_ident)]
@@ -266,6 +282,8 @@ fn supertrait_internal(
                 mod default_items {
                     #(#defaults)*
                 }
+
+                const #sealed_ident: () = ();
             }
         }
     };
@@ -321,6 +339,7 @@ struct ImportedTokens {
     default_impl_generics: Generics,
     default_use_generics: Generics,
     default_items: Vec<TraitItem>,
+    sealed_ident: Ident,
 }
 
 impl TryFrom<ItemMod> for ImportedTokens {
@@ -452,6 +471,14 @@ impl TryFrom<ItemMod> for ImportedTokens {
             .map(|item| parse_quote!(#item))
             .collect();
 
+        let Some(Item::Const(sealed_const)) = main_body.get(6) else {
+            return Err(Error::new(
+                item_mod_span,
+                "the seventh item in `exported_tokens` should be a const specifying the sealed ident.",
+            ));
+        };
+        let sealed_ident = sealed_const.ident.clone();
+
         Ok(ImportedTokens {
             const_fns,
             trait_impl_generics: trait_impl_generics.clone(),
@@ -459,6 +486,7 @@ impl TryFrom<ItemMod> for ImportedTokens {
             default_impl_generics: default_impl_generics.clone(),
             default_use_generics: default_use_generics.clone(),
             default_items: default_items,
+            sealed_ident,
         })
     }
 }
@@ -649,6 +677,7 @@ fn impl_supertrait_internal(
         default_impl_generics: _,
         default_use_generics,
         default_items,
+        sealed_ident,
     } = ImportedTokens::try_from(parse2::<ItemMod>(foreign_tokens.into())?)?;
 
     let mut remapped_type_params: HashMap<RemappedGeneric, GenericParam> = HashMap::new();
@@ -810,6 +839,8 @@ fn impl_supertrait_internal(
 
     let output = quote! {
         #item_impl
+
+        impl #trait_mod::#sealed_ident for #impl_target {}
 
         #inherent_impl
 
