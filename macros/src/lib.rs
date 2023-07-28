@@ -16,8 +16,8 @@ use syn::{
     visit::Visit,
     visit_mut::VisitMut,
     Error, GenericParam, Generics, Ident, ImplItem, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod,
-    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, Visibility,
-    WherePredicate,
+    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, TypePath,
+    Visibility, WherePredicate,
 };
 
 #[cfg(feature = "debug")]
@@ -564,6 +564,25 @@ fn merge_generics(a: &Generics, b: &Generics) -> Generics {
     }
 }
 
+struct ReplaceSelfAssociatedType {
+    replace_prefix: TokenStream2,
+}
+
+impl VisitMut for ReplaceSelfAssociatedType {
+    fn visit_type_path_mut(&mut self, type_path: &mut TypePath) {
+        if type_path.path.segments.len() < 2 {
+            return;
+        }
+        let first_seg = type_path.path.segments.first().unwrap();
+        if first_seg.ident != "Self" {
+            return;
+        }
+        let segments = type_path.path.segments.iter().skip(1);
+        let replace = self.replace_prefix.clone();
+        *type_path = parse_quote!(#replace::#(#segments)::*)
+    }
+}
+
 struct ReplaceType {
     search_type: RemappedGeneric,
     replace_type: GenericParam,
@@ -725,7 +744,6 @@ fn impl_supertrait_internal(
         true
     });
 
-    //
     for item in &const_fns {
         if !impl_const_fn_idents.contains(&item.sig.ident) {
             if item.default.is_none() {
@@ -738,6 +756,12 @@ fn impl_supertrait_internal(
         }
     }
     for const_fn in impl_const_fns.iter_mut() {
+        let mut last_seg = trait_path.segments.last().unwrap().clone();
+        last_seg.ident = parse_quote!(Trait);
+        let mut visitor = ReplaceSelfAssociatedType {
+            replace_prefix: quote!(<#impl_target as #trait_mod::#last_seg>),
+        };
+        visitor.visit_impl_item_mut(const_fn);
         let ImplItem::Fn(const_fn) = const_fn else { unreachable!() };
         const_fn.vis = parse_quote!(pub);
     }

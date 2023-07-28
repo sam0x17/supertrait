@@ -187,6 +187,7 @@ pub trait ConstTraitWithGenerics<T: Copy, I: Copy> {
     const fn something_using_i() -> I;
     const fn something_using_t(val: T) -> T;
     const fn something_using_something() -> Self::Something;
+    fn something() -> Self::Something;
     const fn something_using_something_with_default(
         val: Self::SomethingWithDefault,
     ) -> Self::SomethingWithDefault;
@@ -208,9 +209,13 @@ impl<T: Copy> ConstTraitWithGenerics<T, i32> for MyStruct {
         47
     }
 
+    fn something() -> Self::Something {
+        33
+    }
+
     const fn something_using_something_with_default(
-        val: <MyStruct as ConstTraitWithGenerics::Trait<T, i32>>::SomethingWithDefault,
-    ) -> <MyStruct as ConstTraitWithGenerics::Trait<T, i32>>::SomethingWithDefault {
+        val: Self::SomethingWithDefault,
+    ) -> Self::SomethingWithDefault {
         val
     }
 }
