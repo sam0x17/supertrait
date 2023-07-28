@@ -178,3 +178,48 @@ const fn test_incorrect_supertrait() {
     assert!(!a.const_eq(&b));
     assert!(!a.const_ne(&b));
 }
+
+#[supertrait]
+pub trait ConstTraitWithGenerics<T: Copy, I: Copy> {
+    type Something: Copy;
+    type SomethingWithDefault = u8;
+
+    const fn something_using_i() -> I;
+    const fn something_using_t(val: T) -> T;
+    const fn something_using_something() -> Self::Something;
+    const fn something_using_something_with_default(
+        val: Self::SomethingWithDefault,
+    ) -> Self::SomethingWithDefault;
+}
+
+#[impl_supertrait]
+impl<T: Copy> ConstTraitWithGenerics<T, i32> for MyStruct {
+    type Something = u64;
+
+    const fn something_using_i() -> i32 {
+        44
+    }
+
+    const fn something_using_t(val: T) -> T {
+        val
+    }
+
+    const fn something_using_something(
+    ) -> <MyStruct as ConstTraitWithGenerics::Trait<T, i32>>::Something {
+        47
+    }
+
+    const fn something_using_something_with_default(
+        val: <MyStruct as ConstTraitWithGenerics::Trait<T, i32>>::SomethingWithDefault,
+    ) -> <MyStruct as ConstTraitWithGenerics::Trait<T, i32>>::SomethingWithDefault {
+        val
+    }
+}
+
+#[test]
+const fn test_const_trait_generics() {
+    assert!(MyStruct::something_using_something::<bool>() == 47u64);
+    assert!(MyStruct::something_using_i() == 44i32);
+    assert!(MyStruct::something_using_t::<isize>(-33) == -33);
+    assert!(MyStruct::something_using_something_with_default::<i128>(23u8) == 23u8);
+}
