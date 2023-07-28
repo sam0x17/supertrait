@@ -265,6 +265,7 @@ fn supertrait_internal(
                 type __Self = ();
             }
 
+            #[doc(hidden)]
             #sealed_trait
             #modified_trait
 
