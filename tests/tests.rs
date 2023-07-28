@@ -204,8 +204,7 @@ impl<T: Copy> ConstTraitWithGenerics<T, i32> for MyStruct {
         val
     }
 
-    const fn something_using_something(
-    ) -> <MyStruct as ConstTraitWithGenerics::Trait<T, i32>>::Something {
+    const fn something_using_something() -> Self::Something {
         47
     }
 
