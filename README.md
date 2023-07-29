@@ -6,13 +6,67 @@
 [![MIT License](https://img.shields.io/github/license/sam0x17/supertrait)](https://github.com/sam0x17/supertrait/blob/main/LICENSE)
 
 Supertrait is a revolutionary crate that enables _default associated types_ and _const fn trait
-items_ in stable Rust as of July 2023. Supertrait accomplishes these features through a variety
-of macro-related techniques including the use of
+items_ in stable Rust as of July 2023. Supertrait accomplishes this through a variety of
+macro-related techniques including the use of
 [macro_magic](https://crates.io/crates/macro_magic) as well as the "module wormhole" technique
-demonstrated in the docs and expansion for `#[supertrait]` and `#[impl_supertrait]`.
+demonstrated in the docs for `#[supertrait]` and `#[impl_supertrait]`.
 
-Supertraits are also sealed such that a trait created via `#[supertrait]` _can only be impled_
-if `#[impl_supertrait]` is attached to the impl statement.
+Here is an end-to-end example:
+
+```rust
+#[supertrait]
+pub trait Fizz<T: Copy>: Copy + Sized {
+    type Foo = Option<T>;
+    type Bar;
+
+    const fn double_value(val: T) -> (T, T) {
+        (val, val)
+    }
+
+    const fn triple_value(val: T) -> (T, T, T);
+
+    fn double_self_plus(&self, plus: Self::Foo) -> (Self, Self, Self::Foo) {
+        (*self, *self, plus)
+    }
+
+    const fn interleave<I>(&self, a: T, b: I) -> (I, Self::Foo, T);
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+struct Buzz;
+
+#[impl_supertrait]
+impl<T: Copy> Fizz<T> for Buzz {
+    type Bar = usize;
+
+    const fn triple_value(val: T) -> (T, T, T) {
+        (val, val, val)
+    }
+
+    const fn interleave<I>(&self, a: T, b: I) -> (I, Self::Foo, T) {
+        (b, Some(a), a)
+    }
+}
+
+#[test]
+const fn test_buzz_const() {
+    assert!(Buzz::triple_value(3).0 == 3);
+    let buzz = Buzz {};
+    match buzz.interleave('h', false).1 {
+        Some(c) => assert!(c == 'h'),
+        None => unreachable!(),
+    }
+}
+
+#[test]
+fn test_buzz_default_associated_types() {
+    let buzz = Buzz {};
+    assert_eq!(buzz.double_self_plus(Some(3)), (buzz, buzz, Some(3)))
+}
+```
+
+Supertraits are also sealed such that a trait created via `#[supertrait]` can only be impled if
+`#[impl_supertrait]` is attached to the impl statement.
 
 Default associated types are implemented in a way that should be nearly identical with how
 default associated types will functions when they are eventually added to stable rust.
@@ -24,11 +78,10 @@ by the expansion of `#[impl_supertrait]`. These two mechanisms along with the tr
 technique mentioned above collectively ensure that const fn trait items presence and
 correctness is enforced just as strongly as that of regular trait items.
 
-Using inherents as the vehicle for implementing const fn trait items has a few
-drawbacks due to the naming collisions that can occur with existing inherent items as well as
-the inability to blanket impl supertraits containing const fns because it is impossible in
-stable Rust to blanket impl anything other than a real trait (you can'd do this with
-inherents).
+Using inherents as the vehicle for implementing const fn trait items has a few drawbacks due to
+the naming collisions that can occur with existing inherent items as well as the inability to
+blanket impl supertraits containing const fns (because it is impossible in stable Rust to
+blanket impl anything other than a real trait).
 
 That said, inherents are a convenient fallback when you find yourself reaching for const fn
 items in traits, and supertrait contains the most convenient implementation of this behavior
