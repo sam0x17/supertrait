@@ -1,9 +1,19 @@
+//! This module
+
 #![no_std]
+#![warn(missing_docs)]
 
 pub use supertrait_macros::*;
 
 set_supertrait_path!(crate);
 
+/// Implements [`CustomTypeId`] for the specified type and sets its type id to the specified
+/// literal u64 value., e.g. `impl_custom_type_id!(bool, 10681234549081409806);`.
+///
+/// Specifying that two distinct types have the same `TYPE_ID` can lead to UB, so it is up to
+/// the implementer to ensure these remain globally unique.
+///
+/// Used by [`ConstInto`].
 #[macro_export]
 macro_rules! impl_custom_type_id {
     ($ty:ty, $val:literal) => {
@@ -13,6 +23,8 @@ macro_rules! impl_custom_type_id {
     };
 }
 
+/// A trait containing a default assocaited type [`TYPE_ID`] which is supposed to contain a
+/// globally unique `u64` value for all types that implement [`CustomTypeId`].
 pub trait CustomTypeId {
     const TYPE_ID: u64;
 }
@@ -33,14 +45,6 @@ impl_custom_type_id!(i64, 14258752827364393809);
 impl_custom_type_id!(i128, 10725666691061222156);
 impl_custom_type_id!(str, 15226379227753928641);
 impl_custom_type_id!(&str, 10629156722039909512);
-
-// #[supertrait]
-// pub trait ConstFrom<T: CustomTypeId>
-// where
-//     Self: Sized,
-// {
-//     const fn const_from(val: T) -> Self;
-// }
 
 #[supertrait]
 pub trait ConstInto {
