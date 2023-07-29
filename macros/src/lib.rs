@@ -493,7 +493,13 @@ pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream 
 /// Must be attached to any impl statement involving a supertrait.
 ///
 /// This is the impl analogue of [`#[supertrait]`](`macro@supertrait`) that you should use
-/// whenever you impl a supertrait. In fact, a sealing technique is used to prevent
+/// whenever you impl a supertrait. In fact, a sealing technique is used to prevent anyone from
+/// implementing a supertrait manually without the use of `#[impl_supertrait]`, For details on
+/// this sealing technique, see the expansion details for
+/// [`#[supertrait]`](`macro@supertrait`).
+///
+/// Consider the following supertrait definition (from the docs for
+/// [`#[supertrait]`](`macro@supertrait`)):
 ///
 /// ```ignore
 /// use supertrait::*;
@@ -515,7 +521,12 @@ pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream 
 ///
 ///     const fn interleave<I>(&self, a: T, b: I) -> (I, Self::Foo, T);
 /// }
+/// ```
 ///
+/// The following code uses `#[impl_supertrait]` to implement `Fizz<T>` for the struct `Buzz`
+/// and makes use of the implementation in various ways:
+///
+/// ```ignore
 /// #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 /// struct Buzz;
 ///
@@ -548,6 +559,75 @@ pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream 
 ///     assert_eq!(buzz.double_self_plus(Some(3)), (buzz, buzz, Some(3)))
 /// }
 ///```
+///
+/// Note that the `Self::SomeType` syntax can be used to refer to associated types _anywhere_
+/// within a `#[impl_supertrait]` impl block.
+///
+/// ### Expansion
+///
+/// Default associated types that are not overridden are redirected to point to their counter
+/// parts in `MyTrait::Defaults`, with any accompanying generics. Thus the proper paths of any
+/// types mentioned in default associated types is preserved thanks to the `use super::*` in
+/// the "wormhole" `MyTrait` module.
+///
+/// Const fns are implemented as _inherents_ (i.e., directly implemented on the target type)
+/// because Rust does not yet support const fns as trait items in stable. This adds a few
+/// limitations, mainly around naming collisions, however all bounds and generics on const fns
+/// are preserved, and failing to implement them will likewise result in a compile error, so
+/// this is probably as close as we can get to something that emulates const fns as trait items
+/// in a somewhat usable way in stable Rust.
+///
+/// Here is the expansion for the above `#[impl_supertrait]`:
+///
+/// ```ignore
+/// impl<T: Copy> Fizz::Trait<T> for Buzz {
+///     type Bar = usize;
+///
+///     // a value for `Foo` was not specified by the implementer, so the macro expansion
+///     // substitutes the value for `Foo` contained in `Fizz::Defaults`, preserving
+///     // whatever module-local types that may be mentioned in the default associated
+///     // type.
+///     type Foo = <Fizz::Defaults as Fizz::DefaultTypes<T, Buzz>>::Foo;
+///     fn interleave<I>(&self, a: T, b: I) -> (I, <Buzz as Fizz::Trait<T>>::Foo, T) {
+///         (b, Some(a), a)
+///     }
+///     fn triple_value(val: T) -> (T, T, T) {
+///         (val, val, val)
+///     }
+///     fn double_value(val: T) -> (T, T) {
+///         (val, val)
+///     }
+/// }
+///
+/// // This line unseals `Fizz`. Without this line, the sealing bounds on `Fizz`
+/// // will create a compile error.
+/// impl Fizz::SupertraitSealed3587271628 for Buzz {}
+///
+/// // This impl block contains the (inherent) const fn impls of `Fizz` on `Buzz`.
+/// impl Buzz {
+///     pub const fn interleave<I, T: Copy>(
+///         &self,
+///         a: T,
+///         b: I,
+///     ) -> (I, <Buzz as Fizz::Trait<T>>::Foo, T) {
+///         (b, Some(a), a)
+///     }
+///     pub const fn triple_value<T: Copy>(val: T) -> (T, T, T) {
+///         (val, val, val)
+///     }
+///     pub const fn double_value<T: Copy>(val: T) -> (T, T) {
+///         (val, val)
+///     }
+/// }
+///
+/// // This use statement is automatically inserted by the macro expansion to ensure
+/// // the underlying trait is actually brought into scope, since because of the
+/// // "wormhole module" pattern, it is actually within the `Fizz` module.
+/// #[allow(unused)]
+/// use Fizz::Trait as BuzzFizzTraitImpl_4;
+/// ```
+///
+/// See the documentation for [`#[supertrait]`](`macro@supertrait`) for more information.
 #[proc_macro_attribute]
 pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
     parse_macro_input!(attr as Nothing);
