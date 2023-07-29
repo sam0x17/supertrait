@@ -1,4 +1,7 @@
 #![allow(non_snake_case)]
+#![warn(missing_docs)]
+
+//! Contains support macros for [supertrait](https://crates.io/crates/supertrait).
 
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
@@ -44,6 +47,13 @@ where
     rng.gen()
 }
 
+/// Allows you to override the module path where supertrait's macros will look for necessary
+/// re-exports (such as `macro_magic`).
+///
+/// The default is `::supertrait`.
+///
+/// Generally speaking you shouldn't need to use this directly, but in some scenarios (like in
+/// the `lib.rs` of the main crate, this is necessary).
 #[proc_macro]
 pub fn set_supertrait_path(tokens: TokenStream) -> TokenStream {
     let path = parse_macro_input!(tokens as Path);
@@ -147,6 +157,180 @@ fn filter_generics(generics: &Generics, whitelist: &HashSet<GenericUsage>) -> Fi
     }
 }
 
+/// Attach this attribute to a trait definition to transform it into a supertrait, able to make
+/// use of _default associated types_ and const fn trait items (the latter with some
+/// limitations).
+///
+/// The following example demonstrates some of the major features and edge cases of supertraits:
+///
+/// ```ignore
+/// #[supertrait]
+/// pub trait Fizz<T: Copy>: Copy + Sized {
+///     type Foo = Option<T>;
+///     type Bar;
+///
+///     const fn double_value(val: T) -> (T, T) {
+///         (val, val)
+///     }
+///
+///     const fn triple_value(val: T) -> (T, T, T);
+///
+///     fn double_self_plus(&self, plus: Self::Foo) -> (Self, Self, Self::Foo) {
+///         (*self, *self, plus)
+///     }
+///
+///     const fn interleave<I>(&self, a: T, b: I) -> (I, Self::Foo, T);
+/// }
+/// ```
+///
+/// ### Default Associated Types
+///
+/// Supertrait supports default associated types in a supertrait definition. These associated
+/// types can also be used in other trait items via `Self::SomeType` and this will work
+/// properly anywhere in the trait or trait impl.
+///
+/// Implementers are free to override default types specified on the trait by simply impling
+/// that trait item.
+///
+/// In practice, default associated types in supertrait behave exactly the way you would expect
+/// them to behave when they finally reach stable Rust.
+///
+/// Generics are fully supported by this feature, and any types you mention in your default
+/// associated type will automatically be in scope when you
+/// [`#[impl_supertrait]`](`macro@impl_supertrait`) the trait.
+///
+///
+/// ### Const Fn Trait Items
+/// Supertrait also supports const fn trait items. These items are masked by auto-generated
+/// non-const versions of the const fns that are added to enforce trait bounds.
+///
+/// Currently there is no way in stable Rust to add a const fn to a trait. To accomplish
+/// something like this, supertrait does two things:
+///
+/// - First, in the expansion of [`#[impl_supertrait]`](`macro@impl_supertrait`), the const fns
+///   are automatically implemented as _inherents_ on the implementing type. This creates major
+///   limitations and makes it impossible to do things like blanket impls if they involve const
+///   fns.
+/// - Second, non-const copies that mask each const fn trait item are created and injected into
+///   the resulting supertrait. This allow us to ensure all trait bounds are respected by
+///   implementers.
+///
+/// Thus all bounds and trait requirements are enforced on the implementing type, however const
+/// fns in particular are implemented as inherents, i.e. `impl MyStruct { const fn something()
+/// {...} }`.
+///
+/// This technique has a few limitations. Because of naming collisions on inherent impls, you
+/// can't impl the same (const-fn-containing) supertrait on the same type multiple times with
+/// different generics, like you can with famous conventional traits like `From<T>`.
+///
+/// For more information, see the docs for [`#[impl_supertrait]`](`macro@impl_supertrait`).
+///
+/// ## Expansion
+///
+/// Supertrait relies heavily on the token teleportation capabilities provided by
+/// [macro_magic](https://crates.io/crates/macro_magic). As a result, special care has to be
+/// taken to ensure any in-scope types mentioned in the teleported areas of a supertrait are
+/// accessible anywhere the supertrait is implemented.
+///
+/// To accomplish this, supertrait uses the "module wormhole" technique, whereby the actual
+/// trait item (i.e. `MyTrait`) is represented as a module containing `use super::*;`, which in turn "teleports" all local
+/// imports from the trait definition site to any context in which the trait is implemented.
+/// Under the hood, the actual generated trait lives in `MyTrait::Trait`, along with a trait
+/// and struct pair called `DefaultTypes` and `Defaults` (the latter, containing an impl
+/// specifying all of the default types with their proper generics). That said, inside impls
+/// for a supertrait called `MyTrait`, you can refer to the trait like `MyTrait` instead of
+/// `MyTrait::Trait` as well as referring to the associated types like `Self::Whatever`
+/// directly.
+///
+/// The following is the intermediate expansion for the `#[supertrait]` trait definition shown
+/// above, decorated with comments explaining what the various parts do:
+///
+/// ```ignore
+/// #[allow(non_snake_case)]
+/// pub mod Fizz {
+///     // "wormhole technique", this allows us to capture the trait definition import scope
+///     // and re-use it at any trait impl sites.
+///     use super::*;
+///
+///     /// Contains default associated types for this SuperTrait
+///     pub struct Defaults;
+///
+///     /// A subset of the original [`Trait`] containing just the default associated types
+///     /// _without_ their defaults. This is automatically implemented on [`Defaults`],
+///     /// which contains the actual default type values.
+///     pub trait DefaultTypes<T: Copy, __Self> {
+///         type __Self;
+///         type Foo;
+///     }
+///
+///     // note that the `__Self` keyword is used internally in place of `Self`, which is
+///     // replaced back with `Self` at the trait impl site
+///     impl<T: Copy, __Self> DefaultTypes<T, __Self> for Defaults {
+///         // default associated type values are stored here
+///         type Foo = Option<T>;
+///         type __Self = ();
+///     }
+///
+///     // This trait is auto-generated and added as a bound on `Trait` to ensure that
+///     // supertraits can only be implemented via the `#[impl_supertrait]` macro.
+///     #[doc(hidden)]
+///     pub trait SupertraitSealed2484139876 {}
+///
+///     // This is the actual internal trait that gets generated, including the
+///     // auto-generated sealing bound
+///     pub trait Trait<T: Copy>: Copy + Sized + SupertraitSealed2484139876 {
+///         type Bar;
+///
+///         fn double_self_plus(&self, plus: Self::Foo) -> (Self, Self, Self::Foo) {
+///             (*self, *self, plus)
+///         }
+///
+///         type Foo;
+///
+///         fn double_value(val: T) -> (T, T) {
+///             (val, val)
+///         }
+///
+///         fn triple_value(val: T) -> (T, T, T);
+///
+///         fn interleave<I>(&self, a: T, b: I) -> (I, Self::Foo, T);
+///     }
+///
+///     // The tokens of this module are all exported via `macro_magic` so that they can be
+///     // accessed directly by `#[impl_supertrait]`. This contains all the information
+///     // needed to complete the trait impl expansion.
+///     #[::supertrait::__private::macro_magic::export_tokens_no_emit(Fizz_exported_tokens)]
+///     mod exported_tokens {
+///         // tokens for const fns are stored here
+///         trait ConstFns {
+///             const fn double_value(val: T) -> (T, T) {
+///                 (val, val)
+///             }
+///             const fn triple_value(val: T) -> (T, T, T);
+///             const fn interleave<I>(&self, a: T, b: I) -> (I, Self::Foo, T);
+///         }
+///
+///         // tokens various versions of the trait generics are stored in these fns
+///         fn trait_impl_generics<T: Copy>() {}
+///         fn trait_use_generics<T>() {}
+///         fn default_impl_generics<T: Copy, __Self>() {}
+///         fn default_use_generics<T, __Self>() {}
+///
+///         // tokens for default associated type values are stored here
+///         mod default_items {
+///             type Foo = Option<T>;
+///         }
+///
+///         // This const is included solely so `#[impl_supertrait]` can access its `Ident`
+///         // to unseal and successfully implement the underlying supertrait on some type.
+///         const SupertraitSealed2484139876: () = ();
+///     }
+/// }
+/// ```
+///
+/// Note that in the macro expansion code, these items are only stored as a token tree within a
+/// `macro_rules` macro. Thus the syntax here does not need to compile, it just needs to parse
+/// correctly as a module of items from the perspective of `syn`.
 #[proc_macro_attribute]
 pub fn supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
     match supertrait_internal(attr, tokens) {
@@ -306,6 +490,64 @@ pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream 
     }
 }
 
+/// Must be attached to any impl statement involving a supertrait.
+///
+/// This is the impl analogue of [`#[supertrait]`](`macro@supertrait`) that you should use
+/// whenever you impl a supertrait. In fact, a sealing technique is used to prevent
+///
+/// ```ignore
+/// use supertrait::*;
+///
+/// #[supertrait]
+/// pub trait Fizz<T: Copy>: Copy + Sized {
+///     type Foo = Option<T>;
+///     type Bar;
+///
+///     const fn double_value(val: T) -> (T, T) {
+///         (val, val)
+///     }
+///
+///     const fn triple_value(val: T) -> (T, T, T);
+///
+///     fn double_self_plus(&self, plus: Self::Foo) -> (Self, Self, Self::Foo) {
+///         (*self, *self, plus)
+///     }
+///
+///     const fn interleave<I>(&self, a: T, b: I) -> (I, Self::Foo, T);
+/// }
+///
+/// #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+/// struct Buzz;
+///
+/// #[impl_supertrait]
+/// impl<T: Copy> Fizz<T> for Buzz {
+///     type Bar = usize;
+///
+///     const fn triple_value(val: T) -> (T, T, T) {
+///         (val, val, val)
+///     }
+///
+///     const fn interleave<I>(&self, a: T, b: I) -> (I, Self::Foo, T) {
+///         (b, Some(a), a)
+///     }
+/// }
+///
+/// #[test]
+/// const fn test_buzz_const() {
+///     assert!(Buzz::triple_value(3).0 == 3);
+///     let buzz = Buzz {};
+///     match buzz.interleave('h', false).1 {
+///         Some(c) => assert!(c == 'h'),
+///         None => unreachable!(),
+///     }
+/// }
+///
+/// #[test]
+/// fn test_buzz_default_associated_types() {
+///     let buzz = Buzz {};
+///     assert_eq!(buzz.double_self_plus(Some(3)), (buzz, buzz, Some(3)))
+/// }
+///```
 #[proc_macro_attribute]
 pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
     parse_macro_input!(attr as Nothing);
