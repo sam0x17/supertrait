@@ -11,6 +11,7 @@ use rand::{distributions::Standard, prelude::Distribution, Rng};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    fmt::Debug,
     sync::atomic::AtomicU64,
 };
 use syn::{
@@ -225,7 +226,7 @@ fn filter_generics(generics: &Generics, whitelist: &HashSet<GenericUsage>) -> Fi
 ///
 /// For more information, see the docs for [`#[impl_supertrait]`](`macro@impl_supertrait`).
 ///
-/// ## Expansion
+/// ### Expansion
 ///
 /// Supertrait relies heavily on the token teleportation capabilities provided by
 /// [macro_magic](https://crates.io/crates/macro_magic). As a result, special care has to be
@@ -331,17 +332,45 @@ fn filter_generics(generics: &Generics, whitelist: &HashSet<GenericUsage>) -> Fi
 /// Note that in the macro expansion code, these items are only stored as a token tree within a
 /// `macro_rules` macro. Thus the syntax here does not need to compile, it just needs to parse
 /// correctly as a module of items from the perspective of `syn`.
+///
+/// ### Debug Mode
+///
+/// If you enable the `debug` feature, you can add `debug` as an ident argument to this
+/// attribute macro and its expansion will be pretty-printed to the terminal at build time.
+/// This is extremely useful for debugging `supertrait` internals and for providing detailed
+/// information when reporting bugs.
 #[proc_macro_attribute]
 pub fn supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
-    match supertrait_internal(attr, tokens) {
+    let mut attr = attr;
+    let debug = debug_feature(&mut attr);
+    match supertrait_internal(attr, tokens, debug) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.into_compile_error().into(),
+    }
+}
+
+fn debug_feature(attr: &mut TokenStream) -> bool {
+    if let Ok(ident) = syn::parse::<Ident>(attr.clone()) {
+        if ident == "debug" {
+            *attr = TokenStream::new();
+            if cfg!(feature = "debug") {
+                true
+            } else {
+                println!("warning: the 'debug' feature must be enabled for debug to work on supertrait attributes.");
+                false
+            }
+        } else {
+            false
+        }
+    } else {
+        false
     }
 }
 
 fn supertrait_internal(
     attr: impl Into<TokenStream2>,
     tokens: impl Into<TokenStream2>,
+    #[allow(unused)] debug: bool,
 ) -> Result<TokenStream2> {
     parse2::<Nothing>(attr.into())?;
     let def = parse2::<SuperTraitDef>(tokens.into())?;
@@ -482,7 +511,9 @@ fn supertrait_internal(
         }
     };
     #[cfg(feature = "debug")]
-    output.pretty_print();
+    if debug {
+        output.pretty_print();
+    }
     Ok(output)
 }
 
@@ -637,8 +668,17 @@ pub fn __impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream 
 /// ```
 ///
 /// See the documentation for [`#[supertrait]`](`macro@supertrait`) for more information.
+///
+/// ### Debug Mode
+///
+/// If you enable the `debug` feature, you can add `debug` as an ident argument to this
+/// attribute macro and its expansion will be pretty-printed to the terminal at build time.
+/// This is extremely useful for debugging `supertrait` internals and for providing detailed
+/// information when reporting bugs.
 #[proc_macro_attribute]
 pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+    let mut attr = attr;
+    let debug = debug_feature(&mut attr);
     parse_macro_input!(attr as Nothing);
     let item_impl = parse_macro_input!(tokens as ItemImpl);
     let trait_being_impled = match item_impl.trait_.clone() {
@@ -653,12 +693,16 @@ pub fn impl_supertrait(attr: TokenStream, tokens: TokenStream) -> TokenStream {
         "{}_exported_tokens",
         trait_being_impled.segments.last().unwrap().ident
     );
+    let debug_tokens = if debug {
+        quote!(#[debug_mode])
+    } else {
+        quote!()
+    };
     let output = quote! {
         #[#supertrait_path::__impl_supertrait(#trait_being_impled::#export_tokens_ident)]
+        #debug_tokens
         #item_impl
     };
-    // #[cfg(feature = "debug")]
-    // output.pretty_print();
     output.into()
 }
 
@@ -993,6 +1037,17 @@ fn impl_supertrait_internal(
     item_tokens: impl Into<TokenStream2>,
 ) -> Result<TokenStream2> {
     let mut item_impl = parse2::<ItemImpl>(item_tokens.into())?;
+    #[cfg(feature = "debug")]
+    let mut debug = false;
+    #[cfg(feature = "debug")]
+    for (i, attr) in item_impl.attrs.iter().enumerate() {
+        let Some(ident) = attr.path().get_ident() else { continue };
+        if ident == "debug_mode" {
+            debug = true;
+            item_impl.attrs.remove(i);
+            break;
+        }
+    }
     let Some((_, trait_path, _)) = &mut item_impl.trait_ else {
         return Err(Error::new(
             item_impl.span(),
@@ -1183,6 +1238,8 @@ fn impl_supertrait_internal(
         use #trait_mod::Trait as #trait_import_name;
     };
     #[cfg(feature = "debug")]
-    output.pretty_print();
+    if debug {
+        output.pretty_print();
+    }
     Ok(output)
 }
