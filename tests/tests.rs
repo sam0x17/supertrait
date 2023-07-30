@@ -278,3 +278,41 @@ fn test_buzz_default_associated_types() {
     let buzz = Buzz {};
     assert_eq!(buzz.double_self_plus(Some(3)), (buzz, buzz, Some(3)))
 }
+
+pub mod some_mod {
+    pub mod some_sub_mod {
+        pub mod sub_sub {
+            pub trait Something {}
+        }
+        pub struct Wiz;
+        #[supertrait::supertrait]
+        pub trait TraitCapturingLocalType: sub_sub::Something {
+            const fn pass_something<T: sub_sub::Something>(val: T) -> T;
+            fn some_method<T: sub_sub::Something>(val: T) -> T;
+            type SomeType = Wiz;
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug)]
+struct Fred;
+
+impl some_mod::some_sub_mod::sub_sub::Something for Fred {}
+
+#[impl_supertrait]
+impl some_mod::some_sub_mod::TraitCapturingLocalType for Fred {
+    const fn pass_something<T: some_mod::some_sub_mod::sub_sub::Something>(val: T) -> T {
+        val
+    }
+
+    fn some_method<T: some_mod::some_sub_mod::sub_sub::Something>(val: T) -> T {
+        val
+    }
+}
+
+#[test]
+fn test_wormhole_module_teleportation() {
+    const A: Fred = Fred::pass_something(Fred {});
+    let b: Fred = Fred::some_method(Fred {});
+    assert_eq!(A, b);
+}

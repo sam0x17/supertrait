@@ -1049,9 +1049,11 @@ fn impl_supertrait_internal(
     );
 
     let trait_mod = trait_path.clone().strip_trailing_generics();
-    trait_path
-        .segments
-        .insert(trait_path.segments.len() - 1, parse_quote!(#trait_mod));
+    let trait_mod_ident = trait_mod.segments.last().unwrap().ident.clone();
+    trait_path.segments.insert(
+        trait_path.segments.len() - 1,
+        parse_quote!(#trait_mod_ident),
+    );
     trait_path.segments.last_mut().unwrap().ident = parse_quote!(Trait);
 
     let mut final_items: HashMap<Ident, ImplItem> = HashMap::new();
