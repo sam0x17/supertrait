@@ -316,3 +316,8 @@ fn test_wormhole_module_teleportation() {
     let b: Fred = Fred::some_method(Fred {});
     assert_eq!(A, b);
 }
+
+#[supertrait(debug)]
+pub trait TraitWithDefaultGenerics<T = bool> {
+    type Something = T;
+}
