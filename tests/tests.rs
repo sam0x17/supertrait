@@ -1,5 +1,6 @@
 #![no_std]
 
+use supertrait::traits::*;
 use supertrait::*;
 
 #[supertrait]
