@@ -69,7 +69,7 @@ Supertraits are also sealed such that a trait created via `#[supertrait]` can on
 `#[impl_supertrait]` is attached to the impl statement.
 
 Default associated types are implemented in a way that should be nearly identical with how
-default associated types will functions when they are eventually added to stable rust.
+default associated types will function when they are eventually added to stable rust.
 
 Const fn trait items are implemented as _inherents_ on the underlying type, however their
 presence is enforced by `#[impl_supertrait]` and their type bounds are enforced by the

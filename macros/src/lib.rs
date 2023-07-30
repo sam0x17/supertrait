@@ -440,17 +440,26 @@ fn supertrait_internal(
             /// _without_ their defaults. This is automatically implemented on [`Defaults`],
             /// which contains the actual default type values.
             pub trait DefaultTypes #default_impl_generics {
+                /// Used internally to represent the `Self` type.
+                #[doc(hidden)]
                 type __Self;
                 #(#unfilled_defaults)*
             }
 
             impl #default_impl_generics DefaultTypes #default_use_generics for Defaults {
                 #(#defaults)*
+                #[doc(hidden)]
                 type __Self = ();
             }
 
+            /// A compile-time generated random trait used to seal supertraits so they can only
+            /// be implemented using `impl_supertrait`.
             #[doc(hidden)]
             #sealed_trait
+
+            /// The internal trait that is a part of this supertrait.
+            ///
+            #(#attrs)*
             #modified_trait
 
             #[#supertrait_path::__private::macro_magic::export_tokens_no_emit(#export_tokens_ident)]
@@ -1167,6 +1176,7 @@ fn impl_supertrait_internal(
 
         #inherent_impl
 
+        #[doc(hidden)]
         #[allow(unused)]
         use #trait_mod::Trait as #trait_import_name;
     };
