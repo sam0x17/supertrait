@@ -1289,6 +1289,26 @@ fn impl_supertrait_internal(
             filter_generics(&trait_impl_generics, &const_fn_visitor.usages).impl_generics;
         let mut const_fn: ImplItemFn = parse_quote!(#const_fn);
         const_fn.sig.generics = merge_generics(&const_fn_generics, &const_fn.sig.generics);
+        const_fn.sig.generics.params = const_fn
+            .sig
+            .generics
+            .params
+            .iter()
+            .cloned()
+            .map(|g| match g {
+                GenericParam::Lifetime(lifetime) => GenericParam::Lifetime(lifetime),
+                GenericParam::Type(typ) => {
+                    let mut typ = typ.clone();
+                    typ.default = None;
+                    GenericParam::Type(typ)
+                }
+                GenericParam::Const(constant) => {
+                    let mut constant = constant.clone();
+                    constant.default = None;
+                    GenericParam::Const(constant)
+                }
+            })
+            .collect();
         const_fn
     });
 

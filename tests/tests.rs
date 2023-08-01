@@ -335,6 +335,5 @@ impl TraitWithDefaultGenerics for TestingTraitWithDefaultGenerics {
 
 #[test]
 const fn test_default_generics_a() {
-    let a = TestingTraitWithDefaultGenerics {};
     assert!(TestingTraitWithDefaultGenerics::something_using_t(true));
 }
