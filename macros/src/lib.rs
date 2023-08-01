@@ -17,6 +17,7 @@ use std::{
 use syn::{
     parse::{Nothing, Parse, ParseStream},
     parse2, parse_macro_input, parse_quote, parse_str,
+    punctuated::Punctuated,
     spanned::Spanned,
     visit::Visit,
     visit_mut::VisitMut,
@@ -155,6 +156,33 @@ fn filter_generics(generics: &Generics, whitelist: &HashSet<GenericUsage>) -> Fi
     FilteredGenerics {
         use_generics,
         impl_generics,
+    }
+}
+
+struct DefaultRemover;
+
+impl VisitMut for DefaultRemover {
+    fn visit_generics_mut(&mut self, generics: &mut Generics) {
+        for param in &mut generics.params {
+            if let syn::GenericParam::Type(ref mut type_param) = param {
+                type_param.default = None;
+            }
+        }
+    }
+}
+
+trait PunctuatedExtension<T: ToTokens + Clone, P: ToTokens + std::default::Default>: Sized {
+    fn push_front(&mut self, value: T);
+}
+
+impl<T: ToTokens + Clone, P: ToTokens + std::default::Default> PunctuatedExtension<T, P>
+    for Punctuated<T, P>
+{
+    fn push_front(&mut self, value: T) {
+        let mut new_punctuated = Punctuated::new();
+        new_punctuated.push(value);
+        new_punctuated.extend(self.iter().cloned());
+        *self = new_punctuated;
     }
 }
 
@@ -401,11 +429,11 @@ fn supertrait_internal(
     default_generics
         .impl_generics
         .params
-        .push(parse_quote!(__Self));
+        .push_front(parse_quote!(__Self));
     default_generics
         .use_generics
         .params
-        .push(parse_quote!(__Self));
+        .push_front(parse_quote!(__Self));
 
     let default_impl_generics = default_generics.impl_generics;
     let default_use_generics = default_generics.use_generics;
@@ -456,6 +484,10 @@ fn supertrait_internal(
     let sealed_trait: ItemTrait = parse_quote!(pub trait #sealed_ident {});
     modified_trait.supertraits.push(parse_quote!(#sealed_ident));
 
+    let mut default_remover = DefaultRemover {};
+    let mut default_impl_generics_no_defaults = default_impl_generics.clone();
+    default_remover.visit_generics_mut(&mut default_impl_generics_no_defaults);
+
     let output = quote! {
         #(#attrs)*
         #[allow(non_snake_case)]
@@ -475,7 +507,7 @@ fn supertrait_internal(
                 #(#unfilled_defaults)*
             }
 
-            impl #default_impl_generics DefaultTypes #default_use_generics for Defaults {
+            impl #default_impl_generics_no_defaults DefaultTypes #default_use_generics for Defaults {
                 #(#defaults)*
                 #[doc(hidden)]
                 type __Self = ();
