@@ -529,6 +529,8 @@ fn supertrait_internal(
     let mut default_impl_generics_no_defaults = default_impl_generics.clone();
     default_remover.visit_generics_mut(&mut default_impl_generics_no_defaults);
 
+    modified_trait.vis = parse_quote!(pub);
+
     let output = quote! {
         #(#attrs)*
         #[allow(non_snake_case)]
