@@ -316,3 +316,25 @@ fn test_wormhole_module_teleportation() {
     let b: Fred = Fred::some_method(Fred {});
     assert_eq!(A, b);
 }
+
+#[supertrait]
+pub trait TraitWithDefaultGenerics<T = bool> {
+    type Something = T;
+
+    const fn something_using_t(val: T) -> T;
+}
+
+struct TestingTraitWithDefaultGenerics;
+
+#[impl_supertrait]
+impl TraitWithDefaultGenerics for TestingTraitWithDefaultGenerics {
+    const fn something_using_t(val: bool) -> bool {
+        val
+    }
+}
+
+#[test]
+const fn test_default_generics_a() {
+    let a = TestingTraitWithDefaultGenerics {};
+    assert!(TestingTraitWithDefaultGenerics::something_using_t(true));
+}
