@@ -105,6 +105,46 @@ struct FilteredGenerics {
     /// Represents the `*` in `impl<*> Something for MyStruct<#>`. Both variants share the same
     /// where clause
     impl_generics: Generics,
+    has_defaults: HashSet<Ident>,
+}
+
+impl FilteredGenerics {
+    fn strip_default_generics(&mut self) {
+        // find generic params in impl_generics that have defaults
+        let has_defaults = self
+            .impl_generics
+            .params
+            .iter()
+            .filter_map(|g| match g {
+                GenericParam::Lifetime(_) => None,
+                GenericParam::Type(typ) => match typ.default {
+                    Some(_) => Some(typ.force_get_ident()),
+                    None => None,
+                },
+                GenericParam::Const(constant) => match constant.default {
+                    Some(_) => Some(constant.force_get_ident()), // might be wrong
+                    None => None,
+                },
+            })
+            .collect::<HashSet<Ident>>();
+        // strip these from impl_generics
+        self.impl_generics.params = self
+            .impl_generics
+            .params
+            .iter()
+            .filter(|g| !has_defaults.contains(&g.force_get_ident()))
+            .cloned()
+            .collect();
+        // also strip them from use_generics
+        self.use_generics.params = self
+            .use_generics
+            .params
+            .iter()
+            .filter(|g| !has_defaults.contains(&g.force_get_ident()))
+            .cloned()
+            .collect();
+        self.has_defaults = has_defaults;
+    }
 }
 
 fn filter_generics(generics: &Generics, whitelist: &HashSet<GenericUsage>) -> FilteredGenerics {
@@ -156,6 +196,7 @@ fn filter_generics(generics: &Generics, whitelist: &HashSet<GenericUsage>) -> Fi
     FilteredGenerics {
         use_generics,
         impl_generics,
+        has_defaults: HashSet::new(),
     }
 }
 
@@ -1093,7 +1134,7 @@ fn impl_supertrait_internal(
         const_fns,
         trait_impl_generics,
         trait_use_generics: _,
-        default_impl_generics: _,
+        default_impl_generics,
         default_use_generics,
         default_items,
         sealed_ident,
@@ -1142,6 +1183,15 @@ fn impl_supertrait_internal(
         parse_quote!(#trait_mod_ident),
     );
     trait_path.segments.last_mut().unwrap().ident = parse_quote!(Trait);
+
+    // strip default generics from default_use_generics
+    let mut filtered_tmp = FilteredGenerics {
+        impl_generics: default_impl_generics,
+        use_generics: default_use_generics,
+        has_defaults: HashSet::new(),
+    };
+    filtered_tmp.strip_default_generics();
+    let default_use_generics = filtered_tmp.use_generics;
 
     let mut final_items: HashMap<Ident, ImplItem> = HashMap::new();
     for item in default_items {
@@ -1245,10 +1295,9 @@ fn impl_supertrait_internal(
     item_impl.items.extend(converted_const_fns);
     let mut impl_visitor = FindGenericParam::new(&item_impl.generics);
     impl_visitor.visit_item_impl(&item_impl);
-    item_impl.generics = filter_generics(&item_impl.generics, &impl_visitor.usages).impl_generics;
-
-    // TODO: remove auto-added impls from item_imp.generics for which there are default
-    // generics
+    let mut filtered_generics = filter_generics(&item_impl.generics, &impl_visitor.usages);
+    filtered_generics.strip_default_generics();
+    item_impl.generics = filtered_generics.impl_generics;
 
     let inherent_impl = if impl_const_fns.len() > 0 {
         Some(quote! {
