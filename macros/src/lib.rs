@@ -1247,6 +1247,9 @@ fn impl_supertrait_internal(
     impl_visitor.visit_item_impl(&item_impl);
     item_impl.generics = filter_generics(&item_impl.generics, &impl_visitor.usages).impl_generics;
 
+    // TODO: remove auto-added impls from item_imp.generics for which there are default
+    // generics
+
     let inherent_impl = if impl_const_fns.len() > 0 {
         Some(quote! {
             // const fn implementations
