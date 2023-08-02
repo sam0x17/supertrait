@@ -1,6 +1,6 @@
 use supertrait::*;
 
-#[supertrait]
+#[supertrait(debug)]
 pub trait DefaultedType {
     type Output: Default = i32;
     fn default() -> Self::Output;

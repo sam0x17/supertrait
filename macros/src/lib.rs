@@ -531,6 +531,10 @@ fn supertrait_internal(
 
     modified_trait.vis = parse_quote!(pub);
 
+    for def in defaults.iter_mut() {
+        def.bounds.clear()
+    }
+
     let output = quote! {
         #(#attrs)*
         #[allow(non_snake_case)]
