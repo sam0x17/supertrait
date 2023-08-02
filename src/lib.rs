@@ -70,7 +70,7 @@
 //! Const fn trait items are implemented as _inherents_ on the underlying type, however their
 //! presence is enforced by [`impl_supertrait`] and their type bounds are enforced by the
 //! requirement for shadow non-const implementations of each const fn trait item that are
-//! filled in by the expansion of [`impl_supertrait`]`. These two mechanisms along with the
+//! filled in by the expansion of [`impl_supertrait`]. These two mechanisms along with the
 //! trait sealing technique mentioned above collectively ensure that const fn trait items
 //! presence and correctness is enforced just as strongly as that of regular trait items.
 //!
