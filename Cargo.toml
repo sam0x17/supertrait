@@ -6,9 +6,10 @@ name = "supertrait"
 version = "0.0.1"
 edition = "2021"
 authors = ["sam0x17"]
-description = "WIP crate providing default associated types and const fn trait items via some macro hackery"
+description = "Supertrait enables default associated types and const fn trait items in stable Rust"
 license = "MIT"
 repository = "https://github.com/sam0x17/supertrait"
+keywords = ["traits", "supertrait", "default-associated-types", "const-fn-trait-items", "macros"]
 
 [dependencies]
 supertrait-macros = { path = "macros", version = "0.0.1" }
