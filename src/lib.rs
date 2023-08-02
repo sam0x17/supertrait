@@ -1,4 +1,4 @@
-//! # Supertrait
+//! # Supertrait 🦹
 //!
 //! [![Crates.io](https://img.shields.io/crates/v/supertrait)](https://crates.io/crates/supertrait)
 //! [![docs.rs](https://img.shields.io/docsrs/supertrait?label=docs)](https://docs.rs/supertrait/latest/supertrait/)

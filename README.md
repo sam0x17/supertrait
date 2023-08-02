@@ -1,4 +1,4 @@
-# Supertrait
+# Supertrait 🦹
 
 [![Crates.io](https://img.shields.io/crates/v/supertrait)](https://crates.io/crates/supertrait)
 [![docs.rs](https://img.shields.io/docsrs/supertrait?label=docs)](https://docs.rs/supertrait/latest/supertrait/)
@@ -64,6 +64,9 @@ fn test_buzz_default_associated_types() {
     assert_eq!(buzz.double_self_plus(Some(3)), (buzz, buzz, Some(3)))
 }
 ```
+
+Notice that in the above supertrait we are able to use both default associated types and const
+fn trait items with full generics support.
 
 Supertraits are also sealed such that a trait created via `#[supertrait]` can only be impled if
 `#[impl_supertrait]` is attached to the impl statement.
