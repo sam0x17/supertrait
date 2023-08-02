@@ -61,18 +61,18 @@
 //! assert_eq!(buzz.double_self_plus(Some(3)), (buzz, buzz, Some(3)));
 //! ```
 //!
-//! Supertraits are also sealed such that a trait created via `#[supertrait]` can only be impled if
-//! `#[impl_supertrait]` is attached to the impl statement.
+//! Supertraits are also sealed such that a trait created via [`supertrait`] can only be impled
+//! if `#[impl_supertrait]` is attached to the impl statement.
 //!
 //! Default associated types are implemented in a way that should be nearly identical with how
 //! default associated types will function when they are eventually added to stable rust.
 //!
 //! Const fn trait items are implemented as _inherents_ on the underlying type, however their
-//! presence is enforced by `#[impl_supertrait]` and their type bounds are enforced by the
-//! requirement for shadow non-const implementations of each const fn trait item that are filled in
-//! by the expansion of `#[impl_supertrait]`. These two mechanisms along with the trait sealing
-//! technique mentioned above collectively ensure that const fn trait items presence and
-//! correctness is enforced just as strongly as that of regular trait items.
+//! presence is enforced by [`impl_supertrait`] and their type bounds are enforced by the
+//! requirement for shadow non-const implementations of each const fn trait item that are
+//! filled in by the expansion of [`impl_supertrait`]`. These two mechanisms along with the
+//! trait sealing technique mentioned above collectively ensure that const fn trait items
+//! presence and correctness is enforced just as strongly as that of regular trait items.
 //!
 //! Using inherents as the vehicle for implementing const fn trait items has a few drawbacks due to
 //! the naming collisions that can occur with existing inherent items as well as the inability to
