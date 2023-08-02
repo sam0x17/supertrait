@@ -9,7 +9,7 @@ authors = ["sam0x17"]
 description = "Supertrait enables default associated types and const fn trait items in stable Rust"
 license = "MIT"
 repository = "https://github.com/sam0x17/supertrait"
-keywords = ["traits", "supertrait", "default-associated-types", "const-fn-trait-items", "macros"]
+keywords = ["traits", "supertrait", "stable", "macros", "trait"]
 
 [dependencies]
 supertrait-macros = { path = "macros", version = "0.1.0" }
