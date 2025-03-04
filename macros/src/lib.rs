@@ -6,7 +6,7 @@
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use rand::{distr::StandardUniform, prelude::Distribution};
 use std::{
     cell::RefCell,
@@ -15,15 +15,15 @@ use std::{
     sync::atomic::AtomicU64,
 };
 use syn::{
+    Error, GenericParam, Generics, Ident, ImplItem, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod,
+    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, TypePath,
+    Visibility, WherePredicate,
     parse::{Nothing, Parse, ParseStream},
-    parse2, parse_macro_input, parse_quote, parse_str,
+    parse_macro_input, parse_quote, parse_str, parse2,
     punctuated::Punctuated,
     spanned::Spanned,
     visit::Visit,
     visit_mut::VisitMut,
-    Error, GenericParam, Generics, Ident, ImplItem, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod,
-    ItemTrait, Path, Result, Signature, TraitItem, TraitItemFn, TraitItemType, TypePath,
-    Visibility, WherePredicate,
 };
 
 #[cfg(feature = "debug")]
@@ -204,7 +204,7 @@ struct DefaultRemover;
 impl VisitMut for DefaultRemover {
     fn visit_generics_mut(&mut self, generics: &mut Generics) {
         for param in &mut generics.params {
-            if let syn::GenericParam::Type(ref mut type_param) = param {
+            if let syn::GenericParam::Type(type_param) = param {
                 type_param.default = None;
             }
         }
@@ -424,7 +424,9 @@ fn debug_feature(attr: &mut TokenStream) -> bool {
             if cfg!(feature = "debug") {
                 true
             } else {
-                println!("warning: the 'debug' feature must be enabled for debug to work on supertrait attributes.");
+                println!(
+                    "warning: the 'debug' feature must be enabled for debug to work on supertrait attributes."
+                );
                 false
             }
         } else {
