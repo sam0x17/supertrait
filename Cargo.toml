@@ -3,7 +3,7 @@ members = ["macros"]
 
 [package]
 name = "supertrait"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["sam0x17"]
 description = "Supertrait enables default associated types and const fn trait items in stable Rust"
@@ -13,7 +13,7 @@ keywords = ["traits", "supertrait", "stable", "macros", "trait"]
 documentation = "https://docs.rs/crate/supertrait/latest"
 
 [dependencies]
-supertrait-macros = { path = "macros", version = "0.2.0" }
+supertrait-macros = { path = "macros", version = "0.2.1" }
 macro_magic = "0.6"
 
 [features]
