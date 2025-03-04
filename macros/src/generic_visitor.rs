@@ -5,11 +5,10 @@ use std::{
     hash::{Hash, Hasher},
 };
 use syn::{
-    parse2,
-    visit::{self, Visit},
     AngleBracketedGenericArguments, Expr, GenericParam, Generics, Lifetime, PathArguments,
     PredicateType, ReturnType, Signature, TraitBound, Type, TypeBareFn, TypeImplTrait,
-    TypeParamBound, TypeParen, TypePath, TypeReference, TypeTraitObject,
+    TypeParamBound, TypeParen, TypePath, TypeReference, TypeTraitObject, parse2,
+    visit::{self, Visit},
 };
 
 #[derive(Clone)]
