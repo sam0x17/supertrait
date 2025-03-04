@@ -6,6 +6,7 @@ authors = ["sam0x17"]
 license = "MIT"
 description = "Support macros for supertrait"
 repository = "https://github.com/sam0x17/supertrait"
+documentation = "https://docs.rs/crate/supertrait/latest"
 
 [lib]
 proc-macro = true

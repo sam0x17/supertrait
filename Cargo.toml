@@ -10,6 +10,7 @@ description = "Supertrait enables default associated types and const fn trait it
 license = "MIT"
 repository = "https://github.com/sam0x17/supertrait"
 keywords = ["traits", "supertrait", "stable", "macros", "trait"]
+documentation = "https://docs.rs/crate/supertrait/latest"
 
 [dependencies]
 supertrait-macros = { path = "macros", version = "0.2.0" }
