@@ -13,7 +13,7 @@ keywords = ["traits", "supertrait", "stable", "macros", "trait"]
 
 [dependencies]
 supertrait-macros = { path = "macros", version = "0.1.0" }
-macro_magic = "0.4"
+macro_magic = "0.6"
 
 [features]
 default = []
