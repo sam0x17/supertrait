@@ -72,7 +72,7 @@ const fn test_const_into() {
         i32: -67,
         char: 'h',
     };
-    assert!(*s.const_into::<bool>() == true);
+    assert!(*s.const_into::<bool>());
     assert!(*s.const_into::<i32>() == -67);
     assert!(*s.const_into::<char>() == 'h');
 }
@@ -106,7 +106,7 @@ where
 }
 
 #[impl_supertrait]
-impl<'i, 'o> RIntoWithDATs<'i, 'o, WrappedU8> for u8 {
+impl<'o> RIntoWithDATs<'_, 'o, WrappedU8> for u8 {
     type Unspecified = (usize, usize);
     type OutputRef = &'o bool;
 }
