@@ -15,8 +15,8 @@ syn = { version = "2", features = ["full", "visit", "visit-mut"] }
 quote = "1"
 proc-macro2 = "1"
 proc-utils = { version = "0", optional = true }
-macro_magic = { version = "0.4", features = ["proc_support"] }
-rand = "0.8.5"
+macro_magic = { version = "0", features = ["proc_support"] }
+rand = "0"
 
 [features]
 default = []

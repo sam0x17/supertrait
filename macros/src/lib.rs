@@ -7,7 +7,7 @@ use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::{format_ident, quote, ToTokens};
-use rand::{distributions::Standard, prelude::Distribution, Rng};
+use rand::{distr::StandardUniform, prelude::Distribution};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -43,10 +43,9 @@ fn get_supertrait_path() -> Path {
 
 fn random<T>() -> T
 where
-    Standard: Distribution<T>,
+    StandardUniform: Distribution<T>,
 {
-    let mut rng = rand::thread_rng();
-    rng.gen()
+    rand::random()
 }
 
 /// Allows you to override the module path where supertrait's macros will look for necessary
@@ -811,13 +810,15 @@ impl TryFrom<ItemMod> for ImportedTokens {
         let Some((_, main_body)) = item_mod.content else {
             return Err(Error::new(
                 item_mod_span,
-                "`exported_tokens` module must have a defined body."
+                "`exported_tokens` module must have a defined body.",
             ));
         };
         let Some(Item::Trait(ItemTrait {
             ident: const_fns_ident,
             items: const_fns,
-        ..})) = main_body.get(0) else {
+            ..
+        })) = main_body.get(0)
+        else {
             return Err(Error::new(
                 item_mod_span,
                 "the first item in `exported_tokens` should be a trait called `ConstFns`.",
@@ -835,11 +836,16 @@ impl TryFrom<ItemMod> for ImportedTokens {
             })
             .collect::<std::result::Result<_, Self::Error>>()?;
 
-        let Some(Item::Fn(ItemFn { sig: Signature {
-            ident: trait_impl_generics_ident,
-            generics: trait_impl_generics,
+        let Some(Item::Fn(ItemFn {
+            sig:
+                Signature {
+                    ident: trait_impl_generics_ident,
+                    generics: trait_impl_generics,
+                    ..
+                },
             ..
-        }, .. })) = main_body.get(1) else {
+        })) = main_body.get(1)
+        else {
             return Err(Error::new(
                 item_mod_span,
                 "the second item in `exported_tokens` should be an fn called `trait_impl_generics`.",
@@ -852,11 +858,16 @@ impl TryFrom<ItemMod> for ImportedTokens {
             ));
         }
 
-        let Some(Item::Fn(ItemFn { sig: Signature {
-            ident: trait_use_generics_ident,
-            generics: trait_use_generics,
+        let Some(Item::Fn(ItemFn {
+            sig:
+                Signature {
+                    ident: trait_use_generics_ident,
+                    generics: trait_use_generics,
+                    ..
+                },
             ..
-        }, .. })) = main_body.get(2) else {
+        })) = main_body.get(2)
+        else {
             return Err(Error::new(
                 item_mod_span,
                 "the third item in `exported_tokens` should be an fn called `trait_use_generics`.",
@@ -869,11 +880,16 @@ impl TryFrom<ItemMod> for ImportedTokens {
             ));
         }
 
-        let Some(Item::Fn(ItemFn { sig: Signature {
-            ident: default_impl_generics_ident,
-            generics: default_impl_generics,
+        let Some(Item::Fn(ItemFn {
+            sig:
+                Signature {
+                    ident: default_impl_generics_ident,
+                    generics: default_impl_generics,
+                    ..
+                },
             ..
-        }, .. })) = main_body.get(3) else {
+        })) = main_body.get(3)
+        else {
             return Err(Error::new(
                 item_mod_span,
                 "the fourth item in `exported_tokens` should be an fn called `default_impl_generics`.",
@@ -886,11 +902,16 @@ impl TryFrom<ItemMod> for ImportedTokens {
             ));
         }
 
-        let Some(Item::Fn(ItemFn { sig: Signature {
-            ident: default_use_generics_ident,
-            generics: default_use_generics,
+        let Some(Item::Fn(ItemFn {
+            sig:
+                Signature {
+                    ident: default_use_generics_ident,
+                    generics: default_use_generics,
+                    ..
+                },
             ..
-        }, .. })) = main_body.get(4) else {
+        })) = main_body.get(4)
+        else {
             return Err(Error::new(
                 item_mod_span,
                 "the fifth item in `exported_tokens` should be an fn called `default_use_generics`.",
@@ -1016,7 +1037,9 @@ trait StripTrailingGenerics {
 impl StripTrailingGenerics for Path {
     fn strip_trailing_generics(&self) -> Self {
         let mut tmp = self.clone();
-        let Some(last) = tmp.segments.last_mut() else { unreachable!() };
+        let Some(last) = tmp.segments.last_mut() else {
+            unreachable!()
+        };
         let ident = last.ident.clone();
         *last = parse_quote!(#ident);
         tmp
@@ -1120,7 +1143,9 @@ fn impl_supertrait_internal(
     let mut debug = false;
     #[cfg(feature = "debug")]
     for (i, attr) in item_impl.attrs.iter().enumerate() {
-        let Some(ident) = attr.path().get_ident() else { continue };
+        let Some(ident) = attr.path().get_ident() else {
+            continue;
+        };
         if ident == "debug_mode" {
             debug = true;
             item_impl.attrs.remove(i);
@@ -1131,7 +1156,7 @@ fn impl_supertrait_internal(
         return Err(Error::new(
             item_impl.span(),
             "#[impl_supertrait] can only be attached to non-inherent impls involving a trait \
-            that has `#[supertrait]` attached to it."
+            that has `#[supertrait]` attached to it.",
         ));
     };
     let impl_target = item_impl.self_ty.clone();
@@ -1242,7 +1267,9 @@ fn impl_supertrait_internal(
     let mut impl_const_fn_idents: HashSet<Ident> = HashSet::new();
     let mut impl_const_fns: Vec<ImplItem>;
     (impl_const_fns, item_impl.items) = item_impl.items.into_iter().partition(|item| {
-        let ImplItem::Fn(impl_item_fn) = item else { return false };
+        let ImplItem::Fn(impl_item_fn) = item else {
+            return false;
+        };
         if impl_item_fn.sig.constness.is_none() {
             return false;
         };
@@ -1268,7 +1295,9 @@ fn impl_supertrait_internal(
             replace_prefix: quote!(<#impl_target as #trait_mod::#last_seg>),
         };
         visitor.visit_impl_item_mut(const_fn);
-        let ImplItem::Fn(const_fn) = const_fn else { unreachable!() };
+        let ImplItem::Fn(const_fn) = const_fn else {
+            unreachable!()
+        };
         const_fn.vis = parse_quote!(pub);
     }
 
