@@ -6,7 +6,7 @@
 [![MIT License](https://img.shields.io/github/license/sam0x17/supertrait)](https://github.com/sam0x17/supertrait/blob/main/LICENSE)
 
 Supertrait is a revolutionary crate that enables _default associated types_ and _const fn trait
-items_ in stable Rust as of July 2023. Supertrait accomplishes this through a variety of
+items_ in stable Rust since July 2023. Supertrait accomplishes this through a variety of
 macro-related techniques including the use of
 [macro_magic](https://crates.io/crates/macro_magic) as well as the "module wormhole" technique
 demonstrated in the docs for `#[supertrait]` and `#[impl_supertrait]`.
